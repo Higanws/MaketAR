@@ -1,26 +1,62 @@
 {
   "name": "maketar-app",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Aplicacion web libre, autohosteable e instalable como PWA para wireframes y diagramas.",
+  "license": "MIT",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "verify": "npm run lint && npm run test && npm run build && npm run e2e"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@xyflow/react": "^12.11.0",
+    "class-variance-authority": "^0.7.1",
+    "cloud-icons": "^0.3.0",
+    "clsx": "^2.1.1",
+    "dagre": "^0.8.5",
+    "dotenv": "^17.4.2",
+    "elkjs": "^0.11.1",
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.21.0",
     "next": "16.2.9",
+    "pg": "^8.22.0",
+    "prisma": "^7.8.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-icons": "^5.6.0",
+    "tailwind-merge": "^3.6.0",
+    "tldraw": "^5.1.1",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }

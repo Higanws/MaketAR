@@ -1,0 +1,31 @@
+{
+  "name": "MaketAR",
+  "short_name": "MaketAR",
+  "description": "Aplicacion visual autohosteable para wireframes y diagramas tecnicos.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#211522",
+  "theme_color": "#211522",
+  "orientation": "any",
+  "categories": ["productivity", "design", "developer"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maketar-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://maketar:maketar@postgres:5432/maketar
+      NEXT_PUBLIC_APP_URL: http://localhost
+    ports:
+      - "${MAKETAR_HTTP_PORT:-80}:3000"
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: maketar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maketar
+      POSTGRES_PASSWORD: maketar
+      POSTGRES_DB: maketar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maketar -d maketar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
