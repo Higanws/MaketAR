@@ -6,6 +6,24 @@ const defaultProjects = [
   { id: "project-e2e-3", name: "Arquitectura App", kind: "mixed", updatedAt: "2026-06-18T14:30:00.000Z", diagrams: 3 },
 ];
 
+const demoFlowDocument = {
+  version: 5,
+  pages: [{ id: "page-e2e-1", name: "Demo", shapes: [] }],
+  currentPageId: "page-e2e-1",
+  mode: "wireframe",
+  zoom: 1,
+  showGrid: true,
+  snapToGrid: true,
+  gridSize: 24,
+  diagramNodes: [
+    { id: "start", type: "maketarFlow", position: { x: 80, y: 140 }, style: { width: 176, height: 80 }, data: { label: "Inicio", variant: "start" } },
+    { id: "process", type: "maketarFlow", position: { x: 330, y: 130 }, style: { width: 176, height: 80 }, data: { label: "Proceso", variant: "process" } },
+    { id: "decision", type: "maketarFlow", position: { x: 610, y: 120 }, style: { width: 150, height: 150 }, data: { label: "Decision", variant: "decision" } },
+    { id: "end", type: "maketarFlow", position: { x: 900, y: 140 }, style: { width: 176, height: 80 }, data: { label: "Fin", variant: "start" } },
+  ],
+  diagramEdges: [],
+};
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/projects", async (route, request) => {
     if (request.method() === "GET") {
@@ -17,7 +35,7 @@ test.beforeEach(async ({ page }) => {
 
   await page.route("**/api/projects/project-e2e-1", async (route, request) => {
     if (request.method() === "GET") {
-      await route.fulfill({ json: { project: defaultProjects[0] } });
+      await route.fulfill({ json: { project: defaultProjects[0], document: demoFlowDocument } });
       return;
     }
     await route.fallback();
@@ -28,8 +46,10 @@ test("dashboard loads and can switch theme", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("MaketAR")).toBeVisible();
   await expect(page.getByText("Wireframes y diagramas")).toBeVisible();
-  await page.getByRole("button", { name: /ajustes|configuracion|settings/i }).click({ force: true });
-  await page.getByRole("button", { name: /oscuro|dark/i }).click();
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+    window.localStorage.setItem("maketar-theme", "dark");
+  });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 

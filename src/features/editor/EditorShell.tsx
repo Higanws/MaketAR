@@ -18,10 +18,14 @@ import {
   OnNodesChange,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   addEdge,
   reconnectEdge,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
+  useReactFlow,
+  useUpdateNodeInternals,
 } from "@xyflow/react";
 import { toPng } from "html-to-image";
 import {
@@ -52,6 +56,7 @@ import {
 } from "lucide-react";
 import {
   createElement,
+  type DragEvent,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   PointerEvent,
@@ -63,7 +68,7 @@ import {
   useState,
 } from "react";
 
-import { applyFlowEdgeLineStyle, defaultFlowSourceHandle, defaultFlowTargetHandle, flowEdgeLineStyleOptions, flowNodeDefaults, getFlowEdgeLineStyle, initialFlowEdges, initialFlowNodes, normalizeFlowEdges } from "@/entities/flow/flow-templates";
+import { applyFlowEdgeLineStyle, defaultFlowSourceHandle, defaultFlowTargetHandle, flowEdgeLineStyleOptions, flowNodeDefaults, getFlowEdgeLineStyle, normalizeConnection, normalizeFlowEdges } from "@/entities/flow/flow-templates";
 import type { FlowEdgeLineStyle, FlowNodeData, FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
 import type { Project } from "@/entities/project/project.types";
 import { addTableColumn, addTableRow, parseTableText, updateTableCell } from "@/entities/wireframe/table";
@@ -81,11 +86,79 @@ import { ColorInput, NumberInput, PropertySection, RangeInput } from "@/shared/u
 import type { EditorDocument } from "@/types/project";
 import { loadProjectDocument, saveProjectDocument } from "@/features/projects/project-client";
 
+const LIBRARY_DRAG_MIME = "application/maketar-library-item";
+
+type LibraryDragPayload =
+  | { kind: "wireframe-shape"; type: WireShape["type"]; label?: string }
+  | { kind: "flow-node"; variant: FlowNodeVariant; label?: string };
+
+function parseLibraryDragPayload(raw: string): LibraryDragPayload | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as LibraryDragPayload;
+    if (parsed.kind === "wireframe-shape" && typeof parsed.type === "string") return parsed;
+    if (parsed.kind === "flow-node" && typeof parsed.variant === "string") return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function libraryDragProps(payload: LibraryDragPayload) {
+  return {
+    draggable: true,
+    onDragStart: (event: DragEvent) => {
+      event.dataTransfer.setData(LIBRARY_DRAG_MIME, JSON.stringify(payload));
+      event.dataTransfer.effectAllowed = "copy";
+    },
+  };
+}
+
+function handleLibraryDragOver(event: DragEvent) {
+  if (!event.dataTransfer.types.includes(LIBRARY_DRAG_MIME)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+}
+
+const libraryItemButtonClass =
+  "group flex h-[72px] cursor-grab flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50 active:cursor-grabbing";
+
+const diagramLibraryItemButtonClass =
+  "group flex h-[74px] cursor-grab flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50 active:cursor-grabbing";
+
+function DataFlowNodeIcon({
+  size = 18,
+  strokeWidth = 1.7,
+  className,
+}: {
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M8 5h14l-2 14H6L8 5Z"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const diagramNodeTools: Array<{ variant: FlowNodeVariant; label: string; icon: IconComponent }> = [
   { variant: "start", label: "Inicio / Fin", icon: Milestone },
   { variant: "process", label: "Proceso", icon: Square },
   { variant: "decision", label: "Decision", icon: Diamond },
-  { variant: "data", label: "Entrada / Salida", icon: BoxSelect },
+  { variant: "data", label: "Entrada / Salida", icon: DataFlowNodeIcon },
   { variant: "image", label: "Imagen", icon: ImageIcon },
   { variant: "text", label: "Texto", icon: Type },
   { variant: "group", label: "Grupo visual", icon: BoxSelect },
@@ -139,6 +212,19 @@ function getImageNodeSize(imageSrc: string, fallback: { width: number; height: n
   });
 }
 
+function getInitialDiagramState(document: EditorDocument | null) {
+  if (!document) {
+    return { nodes: [] as FlowNodeType[], edges: [] as Edge[], ready: false };
+  }
+
+  const nodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : [];
+  const edges = Array.isArray(document.diagramEdges)
+    ? normalizeFlowEdges(document.diagramEdges as Edge[], nodes, { repairHandles: true })
+    : [];
+
+  return { nodes, edges, ready: true };
+}
+
 export function EditorShell({
   project,
   onBack,
@@ -182,8 +268,11 @@ export function EditorShell({
   const deletePage = useEditorStore((state) => state.deletePage);
   const markSaved = useEditorStore((state) => state.markSaved);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [diagramNodes, setDiagramNodes, onDiagramNodesChange] = useNodesState<FlowNodeType>(initialFlowNodes);
-  const [diagramEdges, setDiagramEdges, onDiagramEdgesChange] = useEdgesState(initialFlowEdges);
+  const initialDiagramState = getInitialDiagramState(initialDocument);
+  const [diagramReady, setDiagramReady] = useState(initialDiagramState.ready);
+  const [diagramFlowReady, setDiagramFlowReady] = useState(false);
+  const [diagramNodes, setDiagramNodes, onDiagramNodesChange] = useNodesState<FlowNodeType>(initialDiagramState.nodes);
+  const [diagramEdges, setDiagramEdges, onDiagramEdgesChange] = useEdgesState(initialDiagramState.edges);
   const [selectedDiagramNodeId, setSelectedDiagramNodeId] = useState<string | null>(null);
   const [selectedDiagramEdgeId, setSelectedDiagramEdgeId] = useState<string | null>(null);
   const [selectedDiagramNodeIds, setSelectedDiagramNodeIds] = useState<string[]>([]);
@@ -203,14 +292,19 @@ export function EditorShell({
       ),
     );
   }, [setDiagramNodes]);
-  const addDiagramNode = useCallback((variant: FlowNodeVariant, label?: string) => {
+  const addDiagramNode = useCallback((variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => {
     const nodeCount = diagramNodes.length + 1;
     const defaultLabel = label ?? diagramNodeTools.find((tool) => tool.variant === variant)?.label ?? "Nodo";
     const defaults = flowNodeDefaults[variant];
+    const position = center
+      ? { x: Math.round(center.x - defaults.width / 2), y: Math.round(center.y - defaults.height / 2) }
+      : { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 };
     const node: FlowNodeType = {
       id: `flow-node-${Date.now()}`,
       type: "maketarFlow",
-      position: { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 },
+      position,
+      width: defaults.width,
+      height: defaults.height,
       style: { width: defaults.width, height: defaults.height },
       zIndex: variant === "group" ? -1 : undefined,
       selected: variant !== "group",
@@ -387,12 +481,31 @@ export function EditorShell({
   }, [diagramNodes, setDiagramNodes]);
   const diagramNodesWithHandlers = useMemo(
     () =>
-      diagramNodes.map((node) => ({
-        ...node,
-        data: { ...node.data, onChange: updateDiagramNodeLabel },
-      })),
+      diagramNodes.map((node) => {
+        const defaults = flowNodeDefaults[node.data.variant];
+        const styleWidth = node.style?.width;
+        const styleHeight = node.style?.height;
+        const resolvedWidth = node.width ?? (typeof styleWidth === "number" ? styleWidth : defaults.width);
+        const resolvedHeight = node.height ?? (typeof styleHeight === "number" ? styleHeight : defaults.height);
+
+        return {
+          ...node,
+          width: resolvedWidth,
+          height: resolvedHeight,
+          data: { ...node.data, onChange: updateDiagramNodeLabel },
+        };
+      }),
     [diagramNodes, updateDiagramNodeLabel],
   );
+  const handleDiagramFlowReady = useCallback(() => {
+    setDiagramFlowReady(true);
+  }, []);
+  const handleModeChange = useCallback((nextMode: DiagramMode) => {
+    if (nextMode === "diagram") {
+      setDiagramFlowReady(false);
+    }
+    setMode(nextMode);
+  }, [setMode]);
   const handleDiagramSelectionChange = useCallback((nodeIds: string[], edgeIds: string[]) => {
     if (sameStringList(nodeIds, selectedDiagramNodeIds) && sameStringList(edgeIds, selectedDiagramEdgeIds)) {
       return;
@@ -407,10 +520,12 @@ export function EditorShell({
   useEffect(() => {
     let alive = true;
     const applyDocument = (document: EditorDocument) => {
-      const nextDiagramNodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : initialFlowNodes;
+      const nextDiagramNodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : [];
       useEditorStore.getState().hydrate(document);
       setDiagramNodes(nextDiagramNodes);
-      setDiagramEdges(Array.isArray(document.diagramEdges) ? normalizeFlowEdges(document.diagramEdges as Edge[], nextDiagramNodes, { repairHandles: true }) : initialFlowEdges);
+      setDiagramEdges(Array.isArray(document.diagramEdges) ? normalizeFlowEdges(document.diagramEdges as Edge[], nextDiagramNodes, { repairHandles: true }) : []);
+      setDiagramFlowReady(false);
+      setDiagramReady(true);
     };
 
     if (initialDocument) {
@@ -421,8 +536,12 @@ export function EditorShell({
     }
 
     loadProjectDocument(project.id).then(({ document }) => {
-      if (!alive || !document) return;
-      applyDocument(document);
+      if (!alive) return;
+      if (document) {
+        applyDocument(document);
+      } else {
+        setDiagramReady(true);
+      }
     });
 
     return () => {
@@ -450,9 +569,11 @@ export function EditorShell({
   }, [currentPageId, diagramEdges, diagramNodes, gridSize, markSaved, mode, pages, project.id, showGrid, snapToGrid, zoom]);
 
   useEffect(() => {
+    if (!diagramReady) return;
+    if (mode === "diagram" && !diagramFlowReady) return;
     const timeout = window.setTimeout(saveProject, 650);
     return () => window.clearTimeout(timeout);
-  }, [saveProject]);
+  }, [diagramFlowReady, diagramReady, mode, saveProject]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -575,7 +696,7 @@ export function EditorShell({
           canUndo={canUndo}
           canRedo={canRedo}
           onBack={onBack}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           onUndo={undo}
           onRedo={redo}
           onZoomIn={() => setZoom(zoom + 0.1)}
@@ -630,38 +751,43 @@ export function EditorShell({
               <DiagramCanvas
                 nodes={diagramNodesWithHandlers}
                 edges={diagramEdges}
+                onDiagramFlowReady={handleDiagramFlowReady}
+                onDropFlowNode={addDiagramNode}
                 onNodesChange={onDiagramNodesChange}
                 onEdgesChange={onDiagramEdgesChange}
                 onConnect={(connection) =>
-                  setDiagramEdges((edges) =>
-                    addEdge(
+                  setDiagramEdges((edges) => {
+                    const normalizedConnection = normalizeConnection(connection, diagramNodes);
+                    return addEdge(
                       {
-                        ...connection,
-                        sourceHandle: connection.sourceHandle ?? defaultFlowSourceHandle,
-                        targetHandle: connection.targetHandle ?? defaultFlowTargetHandle,
+                        ...normalizedConnection,
+                        sourceHandle: normalizedConnection.sourceHandle ?? defaultFlowSourceHandle,
+                        targetHandle: normalizedConnection.targetHandle ?? defaultFlowTargetHandle,
                         type: "smoothstep",
                         reconnectable: true,
                         interactionWidth: 32,
                         markerEnd: { type: MarkerType.ArrowClosed },
                         label: "",
                         data: { lineStyle: "solid" },
+                        style: { strokeWidth: 2.5 },
                       },
                       edges,
-                    ).map((edge) => applyFlowEdgeLineStyle(edge)),
-                  )
+                    ).map((edge) => applyFlowEdgeLineStyle(edge));
+                  })
                 }
                 onReconnect={(oldEdge, connection) =>
-                  setDiagramEdges((edges) =>
-                    reconnectEdge(
+                  setDiagramEdges((edges) => {
+                    const normalizedConnection = normalizeConnection(connection, diagramNodes);
+                    return reconnectEdge(
                       oldEdge,
                       {
-                        ...connection,
-                        sourceHandle: connection.sourceHandle ?? defaultFlowSourceHandle,
-                        targetHandle: connection.targetHandle ?? defaultFlowTargetHandle,
+                        ...normalizedConnection,
+                        sourceHandle: normalizedConnection.sourceHandle ?? defaultFlowSourceHandle,
+                        targetHandle: normalizedConnection.targetHandle ?? defaultFlowTargetHandle,
                       },
                       edges,
-                    ).map((edge) => applyFlowEdgeLineStyle({ ...edge, type: "smoothstep", reconnectable: true, interactionWidth: edge.interactionWidth ?? 32 })),
-                  )
+                    ).map((edge) => applyFlowEdgeLineStyle({ ...edge, type: "smoothstep", reconnectable: true, interactionWidth: edge.interactionWidth ?? 32 }));
+                  })
                 }
                 onEdgeLabelChange={(id, label) =>
                   setDiagramEdges((edges) =>
@@ -721,7 +847,7 @@ function LibraryPanel({
   onDuplicatePage: () => void;
   onDeletePage: (id: string) => void;
   onAddShape: (type: WireShape["type"], name?: string) => void;
-  onAddDiagramNode: (variant: FlowNodeVariant, label?: string) => void;
+  onAddDiagramNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
   onAddImage: (imageSrc: string, name?: string) => void;
   onAddTemplate: (template: "dashboard" | "landing" | "mobile" | "form") => void;
   onAddIcon: (iconName: string, iconSet: string, svgSrc?: string) => void;
@@ -1065,8 +1191,11 @@ function LibraryPanel({
                 {category.items.map((item) => (
                   <button
                     key={`${category.name}-${item.kind}`}
+                    type="button"
+                    title="Arrastra al lienzo o haz click para insertar"
+                    {...libraryDragProps({ kind: "wireframe-shape", type: item.kind as WireShape["type"], label: item.label })}
                     onClick={() => onAddShape(item.kind as WireShape["type"], item.label)}
-                    className="group flex h-[72px] flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                    className={libraryItemButtonClass}
                   >
                     <item.icon size={18} className="text-slate-600 group-hover:text-blue-600" />
                     <span className="w-full truncate text-xs font-medium">{item.label}</span>
@@ -1111,7 +1240,7 @@ function DiagramInsertPanel({
   customPackageName: string;
   svgInputRef: RefObject<HTMLInputElement | null>;
   imageInputRef: RefObject<HTMLInputElement | null>;
-  onAddDiagramNode: (variant: FlowNodeVariant, label?: string) => void;
+  onAddDiagramNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
   onSetIconSet: (value: string) => void;
   onSetIconSearch: (value: string) => void;
   onSetCustomPackageName: (value: string) => void;
@@ -1146,7 +1275,12 @@ function DiagramInsertPanel({
           {diagramNodeTools.map((tool) => (
             <button
               key={tool.variant}
-              className="group flex h-[74px] flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+              type="button"
+              title={tool.variant === "image" ? "Haz click para cargar una imagen" : "Arrastra al lienzo o haz click para insertar"}
+              {...(tool.variant === "image"
+                ? {}
+                : libraryDragProps({ kind: "flow-node", variant: tool.variant, label: tool.label }))}
+              className={diagramLibraryItemButtonClass}
               onClick={() => addNodeTool(tool)}
             >
               {createElement(tool.icon, {
@@ -1298,6 +1432,7 @@ function WireframeCanvas() {
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const selectShape = useEditorStore((state) => state.selectShape);
   const selectShapes = useEditorStore((state) => state.selectShapes);
+  const addShape = useEditorStore((state) => state.addShape);
   const moveShape = useEditorStore((state) => state.moveShape);
   const resizeShape = useEditorStore((state) => state.resizeShape);
   const rotateShape = useEditorStore((state) => state.rotateShape);
@@ -1585,6 +1720,14 @@ function WireframeCanvas() {
     <div
       ref={canvasRef}
       className="relative size-full cursor-grab overflow-hidden"
+      onDragOver={handleLibraryDragOver}
+      onDrop={(event) => {
+        event.preventDefault();
+        const payload = parseLibraryDragPayload(event.dataTransfer.getData(LIBRARY_DRAG_MIME));
+        if (!payload || payload.kind !== "wireframe-shape") return;
+        const point = pointerToCanvasFromClient(event.clientX, event.clientY);
+        addShape(payload.type, payload.label, point);
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         setContextMenu(
@@ -2135,22 +2278,25 @@ function NavbarShapeContent({ shape }: { shape: WireShape }) {
 
 const flowNodeTypes = { maketarFlow: FlowNode };
 
-const flowHandleClass = "!z-20 !size-5 !border-[3px] !border-white !bg-blue-500 !shadow-md";
-const flowTargetHandleClass = "!z-10 !size-12 !border-0 !bg-transparent !opacity-0";
+const FLOW_NODE_STROKE_WIDTH = 2.5;
+const FLOW_HANDLE_SIZE = 14;
+const flowHandleClass = "!z-20 !rounded-full !border-2 !border-white !bg-blue-500 !shadow-md";
 const flowHandlePositions = [
-  { id: "top", position: Position.Top },
-  { id: "right", position: Position.Right },
-  { id: "bottom", position: Position.Bottom },
-  { id: "left", position: Position.Left },
+  { id: "top", position: Position.Top, style: { top: 0, left: "50%", transform: "translate(-50%, -50%)" } },
+  { id: "right", position: Position.Right, style: { top: "50%", left: "100%", transform: "translate(-50%, -50%)" } },
+  { id: "bottom", position: Position.Bottom, style: { top: "100%", left: "50%", transform: "translate(-50%, -50%)" } },
+  { id: "left", position: Position.Left, style: { top: "50%", left: 0, transform: "translate(-50%, -50%)" } },
 ] as const;
-const decisionHandleStyle: Record<string, CSSProperties> = {
-  top: { left: "50%", top: 0, transform: "translate(-50%, -50%)" },
-  right: { left: "100%", top: "50%", transform: "translate(-50%, -50%)" },
-  bottom: { left: "50%", top: "100%", transform: "translate(-50%, -50%)" },
-  left: { left: 0, top: "50%", transform: "translate(-50%, -50%)" },
+
+const flowHandleStyle = {
+  width: FLOW_HANDLE_SIZE,
+  height: FLOW_HANDLE_SIZE,
+  minWidth: FLOW_HANDLE_SIZE,
+  minHeight: FLOW_HANDLE_SIZE,
 };
 
 function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNodeData>>) {
+  const updateNodeInternals = useUpdateNodeInternals();
   const variant = data.variant;
   const isDecision = variant === "decision";
   const isText = variant === "text";
@@ -2167,6 +2313,11 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   const stroke = data.stroke ?? defaults.stroke;
   const textColor = data.textColor ?? defaults.textColor;
 
+  useEffect(() => {
+    if (isGroup || isIcon || isImage) return;
+    updateNodeInternals(id);
+  }, [id, isGroup, isIcon, isImage, nodeWidth, nodeHeight, updateNodeInternals]);
+
   return (
     <div className="relative" style={{ width: nodeWidth, height: nodeHeight }}>
       <NodeResizer
@@ -2179,22 +2330,12 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
         <>
           {flowHandlePositions.map((handle) => (
             <Handle
-              key={`${handle.id}-target`}
-              id={`${handle.id}-target`}
-              type="target"
-              position={handle.position}
-              className={flowTargetHandleClass}
-              style={isDecision ? decisionHandleStyle[handle.id] : undefined}
-            />
-          ))}
-          {flowHandlePositions.map((handle) => (
-            <Handle
               key={`${handle.id}-source`}
               id={`${handle.id}-source`}
               type="source"
               position={handle.position}
               className={flowHandleClass}
-              style={isDecision ? decisionHandleStyle[handle.id] : undefined}
+              style={{ ...flowHandleStyle, ...handle.style }}
             />
           ))}
         </>
@@ -2205,7 +2346,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
             points="50,0 100,50 50,100 0,50"
             fill={fill}
             stroke={stroke}
-            strokeWidth="1"
+            strokeWidth={FLOW_NODE_STROKE_WIDTH}
             vectorEffect="non-scaling-stroke"
           />
         </svg>
@@ -2260,6 +2401,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
         style={{
           backgroundColor: isDecision ? "transparent" : fill,
           borderColor: isDecision ? "transparent" : stroke,
+          borderWidth: isDecision ? 0 : FLOW_NODE_STROKE_WIDTH,
           color: textColor,
         }}
       >
@@ -2280,9 +2422,46 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   );
 }
 
+function FlowDiagramSync({
+  nodes,
+  onReady,
+}: {
+  nodes: FlowNodeType[];
+  onReady: () => void;
+}) {
+  const nodesInitialized = useNodesInitialized();
+  const updateNodeInternals = useUpdateNodeInternals();
+  const { setEdges } = useReactFlow();
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+
+    const connectableNodeIds = nodes
+      .filter((node) => node.data.variant !== "group" && node.data.variant !== "icon" && node.data.variant !== "image")
+      .map((node) => node.id);
+
+    for (const nodeId of connectableNodeIds) {
+      updateNodeInternals(nodeId);
+    }
+
+    const frame = requestAnimationFrame(() => {
+      if (connectableNodeIds.length > 0) {
+        setEdges((currentEdges) => currentEdges.map((edge) => ({ ...edge })));
+      }
+      onReady();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [nodes, nodesInitialized, onReady, setEdges, updateNodeInternals]);
+
+  return null;
+}
+
 function DiagramCanvas({
   nodes,
   edges,
+  onDiagramFlowReady,
+  onDropFlowNode,
   onNodesChange,
   onEdgesChange,
   onConnect,
@@ -2299,6 +2478,8 @@ function DiagramCanvas({
 }: {
   nodes: FlowNodeType[];
   edges: Edge[];
+  onDiagramFlowReady: () => void;
+  onDropFlowNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
   onNodesChange: OnNodesChange<FlowNodeType>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -2313,6 +2494,69 @@ function DiagramCanvas({
   onCopySelection: () => void;
   onPaste: () => void;
 }) {
+  return (
+    <ReactFlowProvider>
+      <DiagramCanvasInner
+        nodes={nodes}
+        edges={edges}
+        onDiagramFlowReady={onDiagramFlowReady}
+        onDropFlowNode={onDropFlowNode}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onReconnect={onReconnect}
+        onEdgeLabelChange={onEdgeLabelChange}
+        onSelectionChange={onSelectionChange}
+        onDeleteSelection={onDeleteSelection}
+        onDeleteNode={onDeleteNode}
+        onDeleteEdge={onDeleteEdge}
+        onDuplicateNode={onDuplicateNode}
+        onDuplicateSelection={onDuplicateSelection}
+        onCopySelection={onCopySelection}
+        onPaste={onPaste}
+      />
+    </ReactFlowProvider>
+  );
+}
+
+function DiagramCanvasInner({
+  nodes,
+  edges,
+  onDiagramFlowReady,
+  onDropFlowNode,
+  onNodesChange,
+  onEdgesChange,
+  onConnect,
+  onReconnect,
+  onEdgeLabelChange,
+  onSelectionChange,
+  onDeleteSelection,
+  onDeleteNode,
+  onDeleteEdge,
+  onDuplicateNode,
+  onDuplicateSelection,
+  onCopySelection,
+  onPaste,
+}: {
+  nodes: FlowNodeType[];
+  edges: Edge[];
+  onDiagramFlowReady: () => void;
+  onDropFlowNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
+  onNodesChange: OnNodesChange<FlowNodeType>;
+  onEdgesChange: OnEdgesChange;
+  onConnect: OnConnect;
+  onReconnect: (oldEdge: Edge, connection: Connection) => void;
+  onEdgeLabelChange: (id: string, label: string) => void;
+  onSelectionChange: (nodeIds: string[], edgeIds: string[]) => void;
+  onDeleteSelection: () => void;
+  onDeleteNode: (id: string) => void;
+  onDeleteEdge: (id: string) => void;
+  onDuplicateNode: (id: string) => void;
+  onDuplicateSelection: () => void;
+  onCopySelection: () => void;
+  onPaste: () => void;
+}) {
+  const { screenToFlowPosition } = useReactFlow();
   const [contextMenu, setContextMenu] = useState<null | {
     type: "node" | "edge" | "pane";
     id?: string;
@@ -2322,6 +2566,13 @@ function DiagramCanvas({
   const selectedNodeIds = useMemo(() => nodes.filter((node) => node.selected).map((node) => node.id), [nodes]);
   const selectedEdgeIds = useMemo(() => edges.filter((edge) => edge.selected).map((edge) => edge.id), [edges]);
   const hasSelection = selectedNodeIds.length > 0 || selectedEdgeIds.length > 0;
+  const handleLibraryDrop = useCallback((event: DragEvent) => {
+    event.preventDefault();
+    const payload = parseLibraryDragPayload(event.dataTransfer.getData(LIBRARY_DRAG_MIME));
+    if (!payload || payload.kind !== "flow-node") return;
+    const center = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    onDropFlowNode(payload.variant, payload.label, center);
+  }, [onDropFlowNode, screenToFlowPosition]);
 
   return (
     <div className="size-full bg-white">
@@ -2333,6 +2584,8 @@ function DiagramCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onReconnect={onReconnect}
+        onDragOver={handleLibraryDragOver}
+        onDrop={handleLibraryDrop}
         edgesReconnectable
         deleteKeyCode={null}
         multiSelectionKeyCode={["Meta", "Control", "Shift"]}
@@ -2362,12 +2615,18 @@ function DiagramCanvas({
             selectedEdges.map((edge) => edge.id),
           );
         }}
-        defaultEdgeOptions={{ type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed } }}
+        defaultEdgeOptions={{
+          type: "smoothstep",
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { strokeWidth: 2.5 },
+        }}
+        connectionLineStyle={{ strokeWidth: 2.5 }}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={44}
         reconnectRadius={32}
         fitView
       >
+        <FlowDiagramSync nodes={nodes} onReady={onDiagramFlowReady} />
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#94a3b8" />
         <Controls />
         <MiniMap pannable zoomable />

@@ -1,12 +1,16 @@
-import { type Edge, MarkerType } from "@xyflow/react";
+import { type Connection, type Edge, MarkerType } from "@xyflow/react";
 
 import type { FlowEdgeLineStyle, FlowEdgeType, FlowNodeType, FlowNodeVariant, FlowTemplateType } from "@/entities/flow/flow.types";
 import type { Project } from "@/entities/project/project.types";
 import type { DiagramMode, WirePage } from "@/entities/wireframe/wireframe.types";
 
 export const defaultFlowSourceHandle = "right-source";
-export const defaultFlowTargetHandle = "left-target";
+export const defaultFlowTargetHandle = "left-source";
 type FlowHandleSide = "top" | "right" | "bottom" | "left";
+
+export function resolveFlowHandleId(handle: string | null | undefined, fallback: string) {
+  return (handle ?? fallback).replace(/-target$/, "-source");
+}
 
 export const flowEdgeLineStyleOptions: Array<{ label: string; value: FlowEdgeLineStyle }> = [
   { label: "Solida", value: "solid" },
@@ -73,6 +77,8 @@ const flowNode = (
   id,
   type: "maketarFlow",
   position: { x, y },
+  width: flowNodeDefaults[variant].width,
+  height: flowNodeDefaults[variant].height,
   style: {
     width: flowNodeDefaults[variant].width,
     height: flowNodeDefaults[variant].height,
@@ -120,8 +126,7 @@ export const flowNodeDefaults: Record<FlowNodeVariant, { width: number; height: 
   group: { width: 288, height: 176, fill: "#dbeafe", stroke: "#60a5fa", textColor: "#2563eb" },
 };
 
-const sourceHandle = (side: FlowHandleSide) => `${side}-source`;
-const targetHandle = (side: FlowHandleSide) => `${side}-target`;
+const flowHandleId = (side: FlowHandleSide) => `${side}-source`;
 
 const flowEdge = (
   id: string,
@@ -134,8 +139,8 @@ const flowEdge = (
     id,
     source,
     target,
-    sourceHandle: sourceHandle(handles.source ?? "right"),
-    targetHandle: targetHandle(handles.target ?? "left"),
+    sourceHandle: flowHandleId(handles.source ?? "right"),
+    targetHandle: flowHandleId(handles.target ?? "left"),
     type: "smoothstep",
     label,
     markerEnd: { type: MarkerType.ArrowClosed },
@@ -178,20 +183,53 @@ export function normalizeFlowEdges(edges: Edge[], nodes: FlowNodeType[] = [], op
   );
 }
 
+export function normalizeConnection(connection: Connection, nodes: FlowNodeType[] = []): Connection {
+  if (!connection.source || !connection.target) return connection;
+
+  const hasExplicitHandles = Boolean(connection.sourceHandle && connection.targetHandle);
+  const [edge] = normalizeFlowEdges(
+    [{
+      id: "pending-connection",
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle ?? undefined,
+      targetHandle: connection.targetHandle ?? undefined,
+    }],
+    nodes,
+    { repairHandles: !hasExplicitHandles },
+  );
+
+  return {
+    ...connection,
+    sourceHandle: edge.sourceHandle ?? connection.sourceHandle,
+    targetHandle: edge.targetHandle ?? connection.targetHandle,
+  };
+}
+
 function normalizeFlowEdge(
   edge: Edge,
   nodesById: Map<string, FlowNodeType>,
   usedAnchors: Set<string>,
   options: NormalizeFlowEdgesOptions,
 ) {
+  const sourceHandle = resolveFlowHandleId(
+    normalizeHandle(edge.sourceHandle, "source", edge, nodesById, usedAnchors, options),
+    defaultFlowSourceHandle,
+  );
+  const targetHandle = resolveFlowHandleId(
+    normalizeHandle(edge.targetHandle, "target", edge, nodesById, usedAnchors, options),
+    defaultFlowTargetHandle,
+  );
+
   return {
     ...edge,
-    sourceHandle: normalizeHandle(edge.sourceHandle, "source", edge, nodesById, usedAnchors, options),
-    targetHandle: normalizeHandle(edge.targetHandle, "target", edge, nodesById, usedAnchors, options),
+    sourceHandle,
+    targetHandle,
     type: "smoothstep",
     reconnectable: true,
     interactionWidth: edge.interactionWidth ?? 32,
     markerEnd: edge.markerEnd ?? { type: MarkerType.ArrowClosed },
+    style: { strokeWidth: 2.5, ...edge.style },
   };
 }
 
@@ -206,22 +244,29 @@ function normalizeHandle(
   const sourceNode = nodesById.get(edge.source);
   const targetNode = nodesById.get(edge.target);
   if (!sourceNode || !targetNode) {
-    return currentHandle ?? (type === "source" ? defaultFlowSourceHandle : defaultFlowTargetHandle);
+    return resolveFlowHandleId(
+      currentHandle,
+      type === "source" ? defaultFlowSourceHandle : defaultFlowTargetHandle,
+    );
   }
 
   const node = type === "source" ? sourceNode : targetNode;
-  if (currentHandle && !options.repairHandles) {
-    usedAnchors.add(anchorKey(node.id, handleSideFromId(currentHandle) ?? "right"));
-    return currentHandle;
+  const defaultHandle = type === "source" ? defaultFlowSourceHandle : defaultFlowTargetHandle;
+  const resolvedCurrentHandle = currentHandle ? resolveFlowHandleId(currentHandle, defaultHandle) : null;
+  const shouldKeepCurrentHandle =
+    resolvedCurrentHandle &&
+    (!options.repairHandles || resolvedCurrentHandle !== defaultHandle);
+  if (shouldKeepCurrentHandle) {
+    usedAnchors.add(anchorKey(node.id, handleSideFromId(resolvedCurrentHandle) ?? "right"));
+    return resolvedCurrentHandle;
   }
 
   const inferredSide = type === "source"
     ? chooseHandleSide(sourceNode, targetNode)
     : chooseHandleSide(targetNode, sourceNode);
   const side = chooseFreeHandleSide(node.id, inferredSide, usedAnchors);
-  const inferredHandle = type === "source" ? sourceHandle(side) : targetHandle(side);
 
-  return inferredHandle;
+  return flowHandleId(side);
 }
 
 function handleSideFromId(handleId: string): FlowHandleSide | null {

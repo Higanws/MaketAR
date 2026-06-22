@@ -7,6 +7,7 @@ import {
   defaultFlowTargetHandle,
   getFlowEdgeLineStyle,
   makeFlowTemplate,
+  normalizeConnection,
   normalizeFlowEdges,
 } from "./flow-templates";
 
@@ -78,10 +79,50 @@ describe("flow edge styles", () => {
     const [edge] = normalizeFlowEdges(
       [{ id: "e1", source: "support-decision", target: "support-close", sourceHandle: "left-source", targetHandle: "top-target" }],
       supportFlow.nodes,
+      { repairHandles: true },
     );
 
     expect(edge.sourceHandle).toBe("left-source");
-    expect(edge.targetHandle).toBe("top-target");
+    expect(edge.targetHandle).toBe("top-source");
+  });
+
+  it("preserves non-default target handles when repairing legacy edges", () => {
+    const nodes = [
+      {
+        id: "process-node",
+        type: "maketarFlow",
+        position: { x: 120, y: 220 },
+        style: { width: 176, height: 80 },
+        data: { label: "Proceso", variant: "process" },
+      },
+      {
+        id: "decision-node",
+        type: "maketarFlow",
+        position: { x: 420, y: 180 },
+        style: { width: 150, height: 150 },
+        data: { label: "Decision", variant: "decision" },
+      },
+    ] as const;
+
+    const [edge] = normalizeFlowEdges(
+      [{ id: "e1", source: "process-node", target: "decision-node", sourceHandle: "right-source", targetHandle: "top-target" }],
+      [...nodes],
+      { repairHandles: true },
+    );
+
+    expect(edge.sourceHandle).toBe("right-source");
+    expect(edge.targetHandle).toBe("top-source");
+  });
+
+  it("infers missing connection handles from node geometry", () => {
+    const supportFlow = makeFlowTemplate("support-flow");
+    const connection = normalizeConnection(
+      { source: "support-triage", target: "support-decision" },
+      supportFlow.nodes,
+    );
+
+    expect(connection.sourceHandle).toBe("right-source");
+    expect(connection.targetHandle).toBe("left-source");
   });
 
   it("keeps all flow templates aligned with current node rules", () => {

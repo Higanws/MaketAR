@@ -244,6 +244,11 @@ button:disabled {
   font-weight: 700;
 }
 
+.react-flow__edge-path,
+.react-flow__connection-path {
+  stroke-width: 2.5px;
+}
+
 .theme-popover {
   animation: theme-popover-in 160ms ease both;
   transform-origin: bottom left;

@@ -114,7 +114,7 @@ type EditorState = {
   setMode: (mode: DiagramMode) => void;
   selectShape: (id: string | null, additive?: boolean) => void;
   selectShapes: (ids: string[], additive?: boolean) => void;
-  addShape: (type: WireShape["type"], name?: string) => void;
+  addShape: (type: WireShape["type"], name?: string, center?: { x: number; y: number }) => void;
   addIconShape: (iconName: string, iconSet: string, svgSrc?: string) => void;
   addCustomIconShape: (name: string, svgSrc: string, iconSet?: string) => void;
   addImageShape: (imageSrc: string, name?: string) => void;
@@ -615,9 +615,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
           selectedIds,
         };
       }),
-    addShape: (type, name) =>
+    addShape: (type, name, center) =>
       commit((state) => {
         const shape = makeShape(type, name);
+        if (center) {
+          shape.x = Math.round(center.x - shape.width / 2);
+          shape.y = Math.round(center.y - shape.height / 2);
+        }
         return {
           ...updateCurrentPage(state, (shapes) => [...shapes, shape]),
           selectedId: shape.id,
