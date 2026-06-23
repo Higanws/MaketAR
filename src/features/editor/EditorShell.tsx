@@ -69,7 +69,7 @@ import {
 } from "react";
 
 import { applyFlowEdgeLineStyle, defaultFlowSourceHandle, defaultFlowTargetHandle, flowEdgeLineStyleOptions, flowNodeDefaults, getFlowEdgeLineStyle, normalizeConnection, normalizeFlowEdges } from "@/entities/flow/flow-templates";
-import type { FlowEdgeLineStyle, FlowNodeData, FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
+import type { FlowEdgeLineStyle, FlowNodeData, FlowNodeType, FlowNodeVariant, FlowTextAlign, FlowTextVerticalAlign } from "@/entities/flow/flow.types";
 import type { Project } from "@/entities/project/project.types";
 import { addTableColumn, addTableRow, parseTableText, updateTableCell } from "@/entities/wireframe/table";
 import type { DiagramMode, TemplateType, WireShape } from "@/entities/wireframe/wireframe.types";
@@ -2295,6 +2295,24 @@ const flowHandleStyle = {
   minHeight: FLOW_HANDLE_SIZE,
 };
 
+const flowTextAlignClass: Record<FlowTextAlign, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+
+const flowTextVerticalAlignStyle: Record<FlowTextVerticalAlign, string> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+
+const flowTextHorizontalAlignStyle: Record<FlowTextAlign, string> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end",
+};
+
 function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNodeData>>) {
   const updateNodeInternals = useUpdateNodeInternals();
   const variant = data.variant;
@@ -2312,6 +2330,8 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   const fill = data.fill ?? defaults.fill;
   const stroke = data.stroke ?? defaults.stroke;
   const textColor = data.textColor ?? defaults.textColor;
+  const textAlign = data.textAlign ?? "left";
+  const textVerticalAlign = data.textVerticalAlign ?? "middle";
 
   useEffect(() => {
     if (isGroup || isIcon || isImage) return;
@@ -2389,7 +2409,8 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       ) : null}
       <div
         className={cn(
-          "relative flex size-full items-center justify-center border px-3 py-2 shadow-sm",
+          "relative flex size-full border px-3 py-2 shadow-sm",
+          !isText && "items-center justify-center",
           variant === "start" && "rounded-full",
           variant === "process" && "rounded-md",
           isData && "skew-x-[-10deg] rounded-sm",
@@ -2403,14 +2424,21 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
           borderColor: isDecision ? "transparent" : stroke,
           borderWidth: isDecision ? 0 : FLOW_NODE_STROKE_WIDTH,
           color: textColor,
+          ...(isText
+            ? {
+                alignItems: flowTextVerticalAlignStyle[textVerticalAlign],
+                justifyContent: flowTextHorizontalAlignStyle[textAlign],
+              }
+            : {}),
         }}
       >
         <textarea
           className={cn(
-            "nodrag nowheel min-h-10 w-full resize-none bg-transparent text-center text-sm font-semibold outline-none",
+            "nodrag nowheel min-h-10 w-full resize-none bg-transparent text-sm font-semibold outline-none",
             isData && "skew-x-[10deg]",
-            isDecision && "m-auto max-w-24",
-            isText && "text-left font-medium",
+            isDecision && "m-auto max-w-24 text-center",
+            isText && cn("font-medium", flowTextAlignClass[textAlign]),
+            !isText && !isDecision && "text-center",
           )}
           style={{ color: textColor }}
           value={data.label}
@@ -2739,6 +2767,42 @@ function DiagramPropertiesPanel({
                 />
               </div>
             </PropertySection>
+            {selectedNode.data.variant === "text" ? (
+              <PropertySection title="Texto">
+                <label className="property-label">
+                  Alineacion horizontal
+                  <select
+                    className="property-input"
+                    value={selectedNode.data.textAlign ?? "left"}
+                    onChange={(event) =>
+                      onUpdateNode(selectedNode.id, {
+                        data: { ...selectedNode.data, textAlign: event.target.value as FlowTextAlign },
+                      })
+                    }
+                  >
+                    <option value="left">Izquierda</option>
+                    <option value="center">Centro</option>
+                    <option value="right">Derecha</option>
+                  </select>
+                </label>
+                <label className="property-label">
+                  Alineacion vertical
+                  <select
+                    className="property-input"
+                    value={selectedNode.data.textVerticalAlign ?? "middle"}
+                    onChange={(event) =>
+                      onUpdateNode(selectedNode.id, {
+                        data: { ...selectedNode.data, textVerticalAlign: event.target.value as FlowTextVerticalAlign },
+                      })
+                    }
+                  >
+                    <option value="top">Arriba</option>
+                    <option value="middle">Centro</option>
+                    <option value="bottom">Abajo</option>
+                  </select>
+                </label>
+              </PropertySection>
+            ) : null}
             <PropertySection title="Color">
               <ColorInput
                 label="Relleno"

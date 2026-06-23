@@ -13,6 +13,9 @@ export type FlowNodeVariant =
   | "icon"
   | "group";
 
+export type FlowTextAlign = "left" | "center" | "right";
+export type FlowTextVerticalAlign = "top" | "middle" | "bottom";
+
 export type FlowNodeData = {
   label: string;
   variant: FlowNodeVariant;
@@ -23,6 +26,8 @@ export type FlowNodeData = {
   fill?: string;
   stroke?: string;
   textColor?: string;
+  textAlign?: FlowTextAlign;
+  textVerticalAlign?: FlowTextVerticalAlign;
   onChange?: (id: string, label: string) => void;
 };
 

@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
-  "background_color": "#211522",
-  "theme_color": "#211522",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
   "orientation": "any",
   "categories": ["productivity", "design", "developer"],
   "icons": [
