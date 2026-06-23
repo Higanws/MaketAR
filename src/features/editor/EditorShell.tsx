@@ -90,14 +90,22 @@ const LIBRARY_DRAG_MIME = "application/maketar-library-item";
 
 type LibraryDragPayload =
   | { kind: "wireframe-shape"; type: WireShape["type"]; label?: string }
-  | { kind: "flow-node"; variant: FlowNodeVariant; label?: string };
+  | { kind: "wireframe-template"; template: Exclude<TemplateType, "architecture"> }
+  | { kind: "wireframe-icon"; iconName: string; iconSet: string; svgSrc?: string; label?: string }
+  | { kind: "wireframe-custom-icon"; name: string; svgSrc: string; iconSet?: string }
+  | { kind: "flow-node"; variant: FlowNodeVariant; label?: string }
+  | { kind: "flow-icon"; iconName: string; iconSet: string; svgSrc?: string; label?: string };
 
 function parseLibraryDragPayload(raw: string): LibraryDragPayload | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as LibraryDragPayload;
     if (parsed.kind === "wireframe-shape" && typeof parsed.type === "string") return parsed;
+    if (parsed.kind === "wireframe-template" && typeof parsed.template === "string") return parsed;
+    if (parsed.kind === "wireframe-icon" && typeof parsed.iconName === "string" && typeof parsed.iconSet === "string") return parsed;
+    if (parsed.kind === "wireframe-custom-icon" && typeof parsed.name === "string" && typeof parsed.svgSrc === "string") return parsed;
     if (parsed.kind === "flow-node" && typeof parsed.variant === "string") return parsed;
+    if (parsed.kind === "flow-icon" && typeof parsed.iconName === "string" && typeof parsed.iconSet === "string") return parsed;
     return null;
   } catch {
     return null;
@@ -125,6 +133,9 @@ const libraryItemButtonClass =
 
 const diagramLibraryItemButtonClass =
   "group flex h-[74px] cursor-grab flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50 active:cursor-grabbing";
+
+const iconTileButtonClass =
+  "group grid size-10 cursor-grab place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing";
 
 function DataFlowNodeIcon({
   size = 18,
@@ -322,15 +333,20 @@ export function EditorShell({
         : [...nodes, node],
     );
   }, [diagramNodes.length, setDiagramNodes]);
-  const addDiagramIcon = useCallback((iconName: string, iconSet: string, svgSrc?: string, displayLabel?: string) => {
+  const addDiagramIcon = useCallback((iconName: string, iconSet: string, svgSrc?: string, displayLabel?: string, center?: { x: number; y: number }) => {
     const nodeCount = diagramNodes.length + 1;
     const defaults = flowNodeDefaults.icon;
+    const position = center
+      ? { x: Math.round(center.x - defaults.width / 2), y: Math.round(center.y - defaults.height / 2) }
+      : { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 };
     setDiagramNodes((nodes) => [
       ...nodes,
       {
         id: `flow-icon-${Date.now()}`,
         type: "maketarFlow",
-        position: { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 },
+        position,
+        width: defaults.width,
+        height: defaults.height,
         style: { width: defaults.width, height: defaults.height },
         data: {
           label: displayLabel ?? iconName.replace(/^Tb/, ""),
@@ -753,6 +769,7 @@ export function EditorShell({
                 edges={diagramEdges}
                 onDiagramFlowReady={handleDiagramFlowReady}
                 onDropFlowNode={addDiagramNode}
+                onDropFlowIcon={addDiagramIcon}
                 onNodesChange={onDiagramNodesChange}
                 onEdgesChange={onDiagramEdgesChange}
                 onConnect={(connection) =>
@@ -1115,6 +1132,7 @@ function LibraryPanel({
                           label={item.name}
                           title={`${item.name} · ${item.packageName}`}
                           svgSrc={item.svgSrc}
+                          dragPayload={{ kind: "wireframe-custom-icon", name: item.name, svgSrc: item.svgSrc, iconSet: item.packageName }}
                           onClick={() => onAddCustomIcon(item.name, item.svgSrc, item.packageName)}
                         />
                       ))
@@ -1125,6 +1143,7 @@ function LibraryPanel({
                           title={`${item.label} · ${item.set}`}
                           svgSrc={item.svgSrc}
                           icon={item.icon}
+                          dragPayload={{ kind: "wireframe-icon", iconName: item.name, iconSet: item.set, svgSrc: item.svgSrc, label: item.label }}
                           onClick={() => onAddIcon(item.name, item.set, item.svgSrc)}
                         />
                       ))}
@@ -1171,7 +1190,10 @@ function LibraryPanel({
               {editorTemplateOptions.map((template) => (
                 <button
                   key={template.type}
-                  className="group flex h-[72px] flex-col items-start justify-between rounded-md border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                  type="button"
+                  title="Arrastra al lienzo o haz click para insertar"
+                  {...libraryDragProps({ kind: "wireframe-template", template: template.type })}
+                  className={libraryItemButtonClass}
                   onClick={() => onAddTemplate(template.type)}
                 >
                   {createElement(editorTemplateIcons[template.type], {
@@ -1345,6 +1367,7 @@ function DiagramInsertPanel({
                   label={item.name}
                   title={`${item.name} · ${item.packageName}`}
                   svgSrc={item.svgSrc}
+                  dragPayload={{ kind: "flow-icon", iconName: item.name, iconSet: `Mis iconos / ${item.packageName}`, svgSrc: item.svgSrc, label: item.name }}
                   onClick={() => onAddIcon(item.name, `Mis iconos / ${item.packageName}`, item.svgSrc)}
                 />
               ))
@@ -1355,6 +1378,7 @@ function DiagramInsertPanel({
                   title={`${item.label} · ${item.set}`}
                   svgSrc={item.svgSrc}
                   icon={item.icon}
+                  dragPayload={{ kind: "flow-icon", iconName: item.name, iconSet: item.set, svgSrc: item.svgSrc, label: item.label }}
                   onClick={() => onAddIcon(item.name, item.set, item.svgSrc, item.label)}
                 />
               ))}
@@ -1394,20 +1418,24 @@ function IconTile({
   title,
   icon,
   svgSrc,
+  dragPayload,
   onClick,
 }: {
   label: string;
   title: string;
   icon?: IconComponent;
   svgSrc?: string;
+  dragPayload?: LibraryDragPayload;
   onClick: () => void;
 }) {
   return (
     <button
-      className="group grid size-10 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
-      onClick={onClick}
-      title={title}
+      type="button"
+      title={dragPayload ? `${title} · Arrastra al lienzo o haz click` : title}
       aria-label={title}
+      {...(dragPayload ? libraryDragProps(dragPayload) : {})}
+      className={dragPayload ? iconTileButtonClass : "group grid size-10 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"}
+      onClick={onClick}
     >
       {svgSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -1433,6 +1461,9 @@ function WireframeCanvas() {
   const selectShape = useEditorStore((state) => state.selectShape);
   const selectShapes = useEditorStore((state) => state.selectShapes);
   const addShape = useEditorStore((state) => state.addShape);
+  const addIconShape = useEditorStore((state) => state.addIconShape);
+  const addCustomIconShape = useEditorStore((state) => state.addCustomIconShape);
+  const addTemplate = useEditorStore((state) => state.addTemplate);
   const moveShape = useEditorStore((state) => state.moveShape);
   const resizeShape = useEditorStore((state) => state.resizeShape);
   const rotateShape = useEditorStore((state) => state.rotateShape);
@@ -1724,9 +1755,23 @@ function WireframeCanvas() {
       onDrop={(event) => {
         event.preventDefault();
         const payload = parseLibraryDragPayload(event.dataTransfer.getData(LIBRARY_DRAG_MIME));
-        if (!payload || payload.kind !== "wireframe-shape") return;
+        if (!payload) return;
         const point = pointerToCanvasFromClient(event.clientX, event.clientY);
-        addShape(payload.type, payload.label, point);
+        if (payload.kind === "wireframe-shape") {
+          addShape(payload.type, payload.label, point);
+          return;
+        }
+        if (payload.kind === "wireframe-icon") {
+          addIconShape(payload.iconName, payload.iconSet, payload.svgSrc, point);
+          return;
+        }
+        if (payload.kind === "wireframe-custom-icon") {
+          addCustomIconShape(payload.name, payload.svgSrc, payload.iconSet, point);
+          return;
+        }
+        if (payload.kind === "wireframe-template") {
+          addTemplate(payload.template, point);
+        }
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -2313,6 +2358,70 @@ const flowTextHorizontalAlignStyle: Record<FlowTextAlign, string> = {
   right: "flex-end",
 };
 
+function FlowTextAlignmentControls({
+  textAlign,
+  textVerticalAlign,
+  onTextAlignChange,
+  onTextVerticalAlignChange,
+}: {
+  textAlign: FlowTextAlign;
+  textVerticalAlign: FlowTextVerticalAlign;
+  onTextAlignChange: (value: FlowTextAlign) => void;
+  onTextVerticalAlignChange: (value: FlowTextVerticalAlign) => void;
+}) {
+  const horizontalOptions: Array<{ value: FlowTextAlign; label: string; icon: IconComponent }> = [
+    { value: "left", label: "Alinear a la izquierda", icon: AlignHorizontalJustifyStart },
+    { value: "center", label: "Centrar horizontalmente", icon: AlignHorizontalJustifyCenter },
+    { value: "right", label: "Alinear a la derecha", icon: AlignHorizontalJustifyEnd },
+  ];
+  const verticalOptions: Array<{ value: FlowTextVerticalAlign; label: string; icon: IconComponent }> = [
+    { value: "top", label: "Alinear arriba", icon: AlignVerticalJustifyStart },
+    { value: "middle", label: "Centrar verticalmente", icon: AlignVerticalJustifyCenter },
+    { value: "bottom", label: "Alinear abajo", icon: AlignVerticalJustifyEnd },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="property-label mb-2">Alineacion horizontal</p>
+        <div className="grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+          {horizontalOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.label}
+              aria-label={option.label}
+              aria-pressed={textAlign === option.value}
+              className={cn("toolbar-button justify-center", textAlign === option.value && "is-active")}
+              onClick={() => onTextAlignChange(option.value)}
+            >
+              {createElement(option.icon, { size: 16, strokeWidth: 1.8 })}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="property-label mb-2">Alineacion vertical</p>
+        <div className="grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+          {verticalOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.label}
+              aria-label={option.label}
+              aria-pressed={textVerticalAlign === option.value}
+              className={cn("toolbar-button justify-center", textVerticalAlign === option.value && "is-active")}
+              onClick={() => onTextVerticalAlignChange(option.value)}
+            >
+              {createElement(option.icon, { size: 16, strokeWidth: 1.8 })}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNodeData>>) {
   const updateNodeInternals = useUpdateNodeInternals();
   const variant = data.variant;
@@ -2332,21 +2441,23 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   const textColor = data.textColor ?? defaults.textColor;
   const textAlign = data.textAlign ?? "left";
   const textVerticalAlign = data.textVerticalAlign ?? "middle";
+  const iconVisualSize = Math.min(nodeWidth, nodeHeight) * 0.78;
+  const showIconLabel = Boolean(data.label.trim());
 
   useEffect(() => {
-    if (isGroup || isIcon || isImage) return;
+    if (isGroup || isImage) return;
     updateNodeInternals(id);
-  }, [id, isGroup, isIcon, isImage, nodeWidth, nodeHeight, updateNodeInternals]);
+  }, [id, isGroup, isImage, nodeWidth, nodeHeight, updateNodeInternals]);
 
   return (
     <div className="relative" style={{ width: nodeWidth, height: nodeHeight }}>
       <NodeResizer
         isVisible={selected}
-        minWidth={isIcon ? 64 : 80}
-        minHeight={isIcon ? 64 : 48}
+        minWidth={isIcon ? 40 : 80}
+        minHeight={isIcon ? 40 : 48}
         color="#3b82f6"
       />
-      {!isGroup && !isIcon && !isImage ? (
+      {!isGroup && !isImage ? (
         <>
           {flowHandlePositions.map((handle) => (
             <Handle
@@ -2371,21 +2482,41 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
           />
         </svg>
       ) : null}
-      {isIcon || isImage ? (
-        <div className="grid size-full place-items-center gap-1 rounded-md px-2 py-2" style={{ color: textColor }}>
-          {isImage && data.imageSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.imageSrc} alt="" className="max-h-[72%] max-w-full rounded object-contain" />
-          ) : data.svgSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.svgSrc} alt="" className="size-10 object-contain" />
-          ) : IconComponent ? (
-            createElement(IconComponent, { size: 42, strokeWidth: 1.35 })
-          ) : (
-            <ImageIcon size={42} strokeWidth={1.35} />
-          )}
+      {isIcon ? (
+        <div className="relative flex size-full min-h-0 flex-col items-stretch gap-1 px-1 py-1">
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            {data.svgSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.svgSrc} alt="" className="size-full object-contain" />
+            ) : IconComponent ? (
+              createElement(IconComponent, { size: iconVisualSize, strokeWidth: 1.45 })
+            ) : (
+              <ImageIcon size={iconVisualSize} strokeWidth={1.45} />
+            )}
+          </div>
+          {showIconLabel ? (
+            <textarea
+              className="nodrag nowheel min-h-5 w-full shrink-0 resize-none bg-transparent text-center text-[11px] font-semibold leading-tight outline-none"
+              style={{ color: textColor }}
+              value={data.label}
+              onChange={(event) => data.onChange?.(id, event.target.value)}
+              onPointerDown={(event) => event.stopPropagation()}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {isImage ? (
+        <div className="flex size-full min-h-0 flex-col items-stretch gap-1 rounded-md px-2 py-2" style={{ color: textColor }}>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            {data.imageSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.imageSrc} alt="" className="size-full rounded object-contain" />
+            ) : (
+              <ImageIcon size={iconVisualSize} strokeWidth={1.35} />
+            )}
+          </div>
           <textarea
-            className="nodrag nowheel min-h-6 w-full resize-none bg-transparent text-center text-[11px] font-semibold leading-tight text-slate-700 outline-none"
+            className="nodrag nowheel min-h-6 w-full shrink-0 resize-none bg-transparent text-center text-[11px] font-semibold leading-tight text-slate-700 outline-none"
             style={{ color: textColor }}
             value={data.label}
             onChange={(event) => data.onChange?.(id, event.target.value)}
@@ -2465,7 +2596,7 @@ function FlowDiagramSync({
     if (!nodesInitialized) return;
 
     const connectableNodeIds = nodes
-      .filter((node) => node.data.variant !== "group" && node.data.variant !== "icon" && node.data.variant !== "image")
+      .filter((node) => node.data.variant !== "group" && node.data.variant !== "image")
       .map((node) => node.id);
 
     for (const nodeId of connectableNodeIds) {
@@ -2490,6 +2621,7 @@ function DiagramCanvas({
   edges,
   onDiagramFlowReady,
   onDropFlowNode,
+  onDropFlowIcon,
   onNodesChange,
   onEdgesChange,
   onConnect,
@@ -2508,6 +2640,7 @@ function DiagramCanvas({
   edges: Edge[];
   onDiagramFlowReady: () => void;
   onDropFlowNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
+  onDropFlowIcon: (iconName: string, iconSet: string, svgSrc?: string, label?: string, center?: { x: number; y: number }) => void;
   onNodesChange: OnNodesChange<FlowNodeType>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -2529,6 +2662,7 @@ function DiagramCanvas({
         edges={edges}
         onDiagramFlowReady={onDiagramFlowReady}
         onDropFlowNode={onDropFlowNode}
+        onDropFlowIcon={onDropFlowIcon}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -2552,6 +2686,7 @@ function DiagramCanvasInner({
   edges,
   onDiagramFlowReady,
   onDropFlowNode,
+  onDropFlowIcon,
   onNodesChange,
   onEdgesChange,
   onConnect,
@@ -2570,6 +2705,7 @@ function DiagramCanvasInner({
   edges: Edge[];
   onDiagramFlowReady: () => void;
   onDropFlowNode: (variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => void;
+  onDropFlowIcon: (iconName: string, iconSet: string, svgSrc?: string, label?: string, center?: { x: number; y: number }) => void;
   onNodesChange: OnNodesChange<FlowNodeType>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -2597,10 +2733,16 @@ function DiagramCanvasInner({
   const handleLibraryDrop = useCallback((event: DragEvent) => {
     event.preventDefault();
     const payload = parseLibraryDragPayload(event.dataTransfer.getData(LIBRARY_DRAG_MIME));
-    if (!payload || payload.kind !== "flow-node") return;
+    if (!payload) return;
     const center = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    onDropFlowNode(payload.variant, payload.label, center);
-  }, [onDropFlowNode, screenToFlowPosition]);
+    if (payload.kind === "flow-node") {
+      onDropFlowNode(payload.variant, payload.label, center);
+      return;
+    }
+    if (payload.kind === "flow-icon") {
+      onDropFlowIcon(payload.iconName, payload.iconSet, payload.svgSrc, payload.label, center);
+    }
+  }, [onDropFlowIcon, onDropFlowNode, screenToFlowPosition]);
 
   return (
     <div className="size-full bg-white">
@@ -2769,38 +2911,20 @@ function DiagramPropertiesPanel({
             </PropertySection>
             {selectedNode.data.variant === "text" ? (
               <PropertySection title="Texto">
-                <label className="property-label">
-                  Alineacion horizontal
-                  <select
-                    className="property-input"
-                    value={selectedNode.data.textAlign ?? "left"}
-                    onChange={(event) =>
-                      onUpdateNode(selectedNode.id, {
-                        data: { ...selectedNode.data, textAlign: event.target.value as FlowTextAlign },
-                      })
-                    }
-                  >
-                    <option value="left">Izquierda</option>
-                    <option value="center">Centro</option>
-                    <option value="right">Derecha</option>
-                  </select>
-                </label>
-                <label className="property-label">
-                  Alineacion vertical
-                  <select
-                    className="property-input"
-                    value={selectedNode.data.textVerticalAlign ?? "middle"}
-                    onChange={(event) =>
-                      onUpdateNode(selectedNode.id, {
-                        data: { ...selectedNode.data, textVerticalAlign: event.target.value as FlowTextVerticalAlign },
-                      })
-                    }
-                  >
-                    <option value="top">Arriba</option>
-                    <option value="middle">Centro</option>
-                    <option value="bottom">Abajo</option>
-                  </select>
-                </label>
+                <FlowTextAlignmentControls
+                  textAlign={selectedNode.data.textAlign ?? "left"}
+                  textVerticalAlign={selectedNode.data.textVerticalAlign ?? "middle"}
+                  onTextAlignChange={(textAlign) =>
+                    onUpdateNode(selectedNode.id, {
+                      data: { ...selectedNode.data, textAlign },
+                    })
+                  }
+                  onTextVerticalAlignChange={(textVerticalAlign) =>
+                    onUpdateNode(selectedNode.id, {
+                      data: { ...selectedNode.data, textVerticalAlign },
+                    })
+                  }
+                />
               </PropertySection>
             ) : null}
             <PropertySection title="Color">

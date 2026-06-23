@@ -115,10 +115,10 @@ type EditorState = {
   selectShape: (id: string | null, additive?: boolean) => void;
   selectShapes: (ids: string[], additive?: boolean) => void;
   addShape: (type: WireShape["type"], name?: string, center?: { x: number; y: number }) => void;
-  addIconShape: (iconName: string, iconSet: string, svgSrc?: string) => void;
-  addCustomIconShape: (name: string, svgSrc: string, iconSet?: string) => void;
+  addIconShape: (iconName: string, iconSet: string, svgSrc?: string, center?: { x: number; y: number }) => void;
+  addCustomIconShape: (name: string, svgSrc: string, iconSet?: string, center?: { x: number; y: number }) => void;
   addImageShape: (imageSrc: string, name?: string) => void;
-  addTemplate: (template: TemplateType) => void;
+  addTemplate: (template: TemplateType, center?: { x: number; y: number }) => void;
   updateShape: (id: string, patch: Partial<WireShape>) => void;
   updateShapeStyle: (id: string, patch: Partial<ShapeStyle>) => void;
   moveShape: (id: string, x: number, y: number) => void;
@@ -628,7 +628,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
           selectedIds: [shape.id],
         };
       }),
-    addIconShape: (iconName, iconSet, svgSrc) =>
+    addIconShape: (iconName, iconSet, svgSrc, center) =>
       commit((state) => {
         const shape = {
           ...makeShape("icon", iconName),
@@ -649,13 +649,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
             shadow: { x: 0, y: 0, blur: 0, spread: 0, color: "transparent" },
           }),
         };
+        if (center) {
+          shape.x = Math.round(center.x - shape.width / 2);
+          shape.y = Math.round(center.y - shape.height / 2);
+        }
         return {
           ...updateCurrentPage(state, (shapes) => [...shapes, shape]),
           selectedId: shape.id,
           selectedIds: [shape.id],
         };
       }),
-    addCustomIconShape: (name, svgSrc, iconSet = "Mis iconos") =>
+    addCustomIconShape: (name, svgSrc, iconSet = "Mis iconos", center) =>
       commit((state) => {
         const shape = {
           ...makeShape("icon", name),
@@ -675,6 +679,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
             shadow: { x: 0, y: 0, blur: 0, spread: 0, color: "transparent" },
           }),
         };
+        if (center) {
+          shape.x = Math.round(center.x - shape.width / 2);
+          shape.y = Math.round(center.y - shape.height / 2);
+        }
         return {
           ...updateCurrentPage(state, (shapes) => [...shapes, shape]),
           selectedId: shape.id,
@@ -697,13 +705,21 @@ export const useEditorStore = create<EditorState>((set, get) => {
           selectedIds: [shape.id],
         };
       }),
-    addTemplate: (template) =>
+    addTemplate: (template, center) =>
       commit((state) => {
         const shapesToAdd = makeTemplateShapes(template);
+        const positionedShapes = center
+          ? (() => {
+              const bounds = getBounds(shapesToAdd);
+              const dx = Math.round(center.x - (bounds.x + bounds.width / 2));
+              const dy = Math.round(center.y - (bounds.y + bounds.height / 2));
+              return shapesToAdd.map((shape) => ({ ...shape, x: shape.x + dx, y: shape.y + dy }));
+            })()
+          : shapesToAdd;
         return {
-          ...updateCurrentPage(state, (shapes) => [...shapes, ...shapesToAdd]),
-          selectedId: shapesToAdd[shapesToAdd.length - 1]?.id ?? null,
-          selectedIds: shapesToAdd.map((shape) => shape.id),
+          ...updateCurrentPage(state, (shapes) => [...shapes, ...positionedShapes]),
+          selectedId: positionedShapes[positionedShapes.length - 1]?.id ?? null,
+          selectedIds: positionedShapes.map((shape) => shape.id),
         };
       }),
     updateShape: (id, patch) =>
