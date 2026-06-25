@@ -24,6 +24,7 @@ import {
   useEdgesState,
   useNodesInitialized,
   useNodesState,
+  useInternalNode,
   useReactFlow,
   useUpdateNodeInternals,
 } from "@xyflow/react";
@@ -2358,11 +2359,35 @@ const flowTextHorizontalAlignStyle: Record<FlowTextAlign, string> = {
 };
 
 const flowTextareaBaseClass =
-  "nodrag nowheel h-full min-h-0 w-full max-h-full resize-none overflow-hidden bg-transparent outline-none";
+  "nodrag nowheel w-full max-h-full shrink-0 resize-none overflow-hidden bg-transparent outline-none";
+
+function resolveFlowNodeDimensions(
+  width: number | undefined,
+  height: number | undefined,
+  style: { width?: number | string; height?: number | string } | undefined,
+  measured: { width?: number; height?: number } | undefined,
+  defaults: { width: number; height: number },
+) {
+  const styleDimension = (value: number | string | undefined) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
+  };
+
+  return {
+    width: width ?? measured?.width ?? styleDimension(style?.width) ?? defaults.width,
+    height: height ?? measured?.height ?? styleDimension(style?.height) ?? defaults.height,
+  };
+}
 
 function getFlowNodeTextScale(nodeWidth: number, nodeHeight: number, variant: FlowNodeVariant) {
   const defaults = flowNodeDefaults[variant];
-  return Math.min(nodeWidth / defaults.width, nodeHeight / defaults.height);
+  const baseMin = Math.min(defaults.width, defaults.height);
+  const currentMin = Math.min(nodeWidth, nodeHeight);
+  return currentMin / baseMin;
 }
 
 function getFlowNodeFontSize(variant: FlowNodeVariant, scale: number) {
@@ -2451,6 +2476,7 @@ function FlowTextAlignmentControls({
 
 function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNodeData>>) {
   const updateNodeInternals = useUpdateNodeInternals();
+  const internalNode = useInternalNode(id);
   const variant = data.variant;
   const isDecision = variant === "decision";
   const isText = variant === "text";
@@ -2461,8 +2487,13 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   const isGroup = variant === "group";
   const IconComponent = data.iconName && data.iconSet ? iconLookup.get(`${data.iconSet}:${data.iconName}`) : null;
   const defaults = flowNodeDefaults[variant];
-  const nodeWidth = width ?? defaults.width;
-  const nodeHeight = height ?? defaults.height;
+  const { width: nodeWidth, height: nodeHeight } = resolveFlowNodeDimensions(
+    width ?? internalNode?.width,
+    height ?? internalNode?.height,
+    internalNode?.style,
+    internalNode?.measured,
+    defaults,
+  );
   const fill = data.fill ?? defaults.fill;
   const stroke = data.stroke ?? defaults.stroke;
   const textColor = data.textColor ?? defaults.textColor;
@@ -2481,7 +2512,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   }, [id, isGroup, isImage, nodeWidth, nodeHeight, updateNodeInternals]);
 
   return (
-    <div className="relative" style={{ width: nodeWidth, height: nodeHeight }}>
+    <div className="relative size-full">
       <NodeResizer
         isVisible={selected}
         minWidth={isIcon ? 40 : 80}
@@ -2559,7 +2590,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       ) : null}
       {isGroup ? (
         <div
-          className="flex size-full min-h-0 items-start rounded-lg border-2 border-dashed"
+          className="flex size-full min-h-0 items-center justify-center rounded-lg border-2 border-dashed"
           style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke, ...flowPadding }}
         >
           <textarea
@@ -2575,14 +2606,13 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       <div
         className={cn(
           "relative flex size-full min-h-0 border shadow-sm",
-          !isText && "items-center justify-center",
           variant === "start" && "rounded-full",
           variant === "process" && "rounded-md",
           isData && "skew-x-[-10deg] rounded-sm",
           isDocument && "rounded-md after:absolute after:bottom-0 after:left-0 after:h-3 after:w-full after:rounded-b-[50%] after:border-t after:bg-white/60",
           isText && "border-transparent bg-transparent shadow-none",
           isDecision && "absolute inset-0 w-full bg-transparent shadow-none",
-            (isIcon || isImage || isGroup) && "hidden",
+          (isIcon || isImage || isGroup) && "hidden",
         )}
         style={{
           backgroundColor: isDecision ? "transparent" : fill,
@@ -2590,12 +2620,8 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
           borderWidth: isDecision ? 0 : FLOW_NODE_STROKE_WIDTH,
           color: textColor,
           ...flowPadding,
-          ...(isText
-            ? {
-                alignItems: flowTextVerticalAlignStyle[textVerticalAlign],
-                justifyContent: flowTextHorizontalAlignStyle[textAlign],
-              }
-            : {}),
+          alignItems: isText ? flowTextVerticalAlignStyle[textVerticalAlign] : "center",
+          justifyContent: isText ? flowTextHorizontalAlignStyle[textAlign] : "center",
         }}
       >
         <textarea
