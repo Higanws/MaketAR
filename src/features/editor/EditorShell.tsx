@@ -57,7 +57,6 @@ import {
 import {
   createElement,
   type DragEvent,
-  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   PointerEvent,
   type RefObject,
@@ -2358,6 +2357,34 @@ const flowTextHorizontalAlignStyle: Record<FlowTextAlign, string> = {
   right: "flex-end",
 };
 
+const flowTextareaBaseClass =
+  "nodrag nowheel h-full min-h-0 w-full max-h-full resize-none overflow-hidden bg-transparent outline-none";
+
+function getFlowNodeTextScale(nodeWidth: number, nodeHeight: number, variant: FlowNodeVariant) {
+  const defaults = flowNodeDefaults[variant];
+  return Math.min(nodeWidth / defaults.width, nodeHeight / defaults.height);
+}
+
+function getFlowNodeFontSize(variant: FlowNodeVariant, scale: number) {
+  const baseByVariant: Partial<Record<FlowNodeVariant, number>> = {
+    group: 12,
+    icon: 11,
+    image: 11,
+    text: 14,
+  };
+  const base = baseByVariant[variant] ?? 14;
+  return Math.max(8, Math.round(base * scale));
+}
+
+function getFlowNodePadding(scale: number) {
+  return {
+    paddingLeft: Math.max(4, Math.round(12 * scale)),
+    paddingRight: Math.max(4, Math.round(12 * scale)),
+    paddingTop: Math.max(2, Math.round(8 * scale)),
+    paddingBottom: Math.max(2, Math.round(8 * scale)),
+  };
+}
+
 function FlowTextAlignmentControls({
   textAlign,
   textVerticalAlign,
@@ -2443,6 +2470,10 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
   const textVerticalAlign = data.textVerticalAlign ?? "middle";
   const iconVisualSize = Math.min(nodeWidth, nodeHeight) * 0.78;
   const showIconLabel = Boolean(data.label.trim());
+  const textScale = getFlowNodeTextScale(nodeWidth, nodeHeight, variant);
+  const flowFontSize = getFlowNodeFontSize(variant, textScale);
+  const flowPadding = getFlowNodePadding(textScale);
+  const flowTextStyle = { color: textColor, fontSize: flowFontSize, lineHeight: 1.15 };
 
   useEffect(() => {
     if (isGroup || isImage) return;
@@ -2496,8 +2527,9 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
           </div>
           {showIconLabel ? (
             <textarea
-              className="nodrag nowheel min-h-5 w-full shrink-0 resize-none bg-transparent text-center text-[11px] font-semibold leading-tight outline-none"
-              style={{ color: textColor }}
+              className={cn(flowTextareaBaseClass, "shrink-0 text-center font-semibold leading-tight")}
+              style={{ ...flowTextStyle, maxHeight: Math.max(18, nodeHeight * 0.28) }}
+              rows={1}
               value={data.label}
               onChange={(event) => data.onChange?.(id, event.target.value)}
               onPointerDown={(event) => event.stopPropagation()}
@@ -2516,8 +2548,9 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
             )}
           </div>
           <textarea
-            className="nodrag nowheel min-h-6 w-full shrink-0 resize-none bg-transparent text-center text-[11px] font-semibold leading-tight text-slate-700 outline-none"
-            style={{ color: textColor }}
+            className={cn(flowTextareaBaseClass, "shrink-0 text-center font-semibold leading-tight")}
+            style={{ ...flowTextStyle, maxHeight: Math.max(18, nodeHeight * 0.28) }}
+            rows={1}
             value={data.label}
             onChange={(event) => data.onChange?.(id, event.target.value)}
             onPointerDown={(event) => event.stopPropagation()}
@@ -2526,12 +2559,13 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       ) : null}
       {isGroup ? (
         <div
-          className="flex size-full items-start rounded-lg border-2 border-dashed px-3 py-2"
-          style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke }}
+          className="flex size-full min-h-0 items-start rounded-lg border-2 border-dashed"
+          style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke, ...flowPadding }}
         >
           <textarea
-            className="nodrag nowheel min-h-8 w-full resize-none bg-transparent text-left text-xs font-bold uppercase tracking-[0.08em] outline-none"
-            style={{ color: textColor }}
+            className={cn(flowTextareaBaseClass, "font-bold uppercase tracking-[0.08em]")}
+            style={flowTextStyle}
+            rows={1}
             value={data.label}
             onChange={(event) => data.onChange?.(id, event.target.value)}
             onPointerDown={(event) => event.stopPropagation()}
@@ -2540,7 +2574,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       ) : null}
       <div
         className={cn(
-          "relative flex size-full border px-3 py-2 shadow-sm",
+          "relative flex size-full min-h-0 border shadow-sm",
           !isText && "items-center justify-center",
           variant === "start" && "rounded-full",
           variant === "process" && "rounded-md",
@@ -2555,6 +2589,7 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
           borderColor: isDecision ? "transparent" : stroke,
           borderWidth: isDecision ? 0 : FLOW_NODE_STROKE_WIDTH,
           color: textColor,
+          ...flowPadding,
           ...(isText
             ? {
                 alignItems: flowTextVerticalAlignStyle[textVerticalAlign],
@@ -2565,13 +2600,18 @@ function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNode
       >
         <textarea
           className={cn(
-            "nodrag nowheel min-h-10 w-full resize-none bg-transparent text-sm font-semibold outline-none",
+            flowTextareaBaseClass,
+            "font-semibold",
             isData && "skew-x-[10deg]",
-            isDecision && "m-auto max-w-24 text-center",
+            isDecision && "m-auto text-center",
             isText && cn("font-medium", flowTextAlignClass[textAlign]),
             !isText && !isDecision && "text-center",
           )}
-          style={{ color: textColor }}
+          style={{
+            ...flowTextStyle,
+            ...(isDecision ? { maxWidth: Math.max(40, nodeWidth * 0.58) } : {}),
+          }}
+          rows={1}
           value={data.label}
           onChange={(event) => data.onChange?.(id, event.target.value)}
           onPointerDown={(event) => event.stopPropagation()}
