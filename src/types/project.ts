@@ -1,4 +1,4 @@
-import type { DiagramMode, TemplateType, WirePage } from "@/lib/editor-store";
+import type { DiagramMode, TemplateType, WirePage } from "@/stores/editor/editor-store";
 
 export type ProjectKind = "mixed";
 export type FlowTemplateType = "purchase-flow" | "approval-flow" | "support-flow";

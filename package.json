@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:api": "playwright test tests/e2e/api-projects.spec.ts",
     "verify": "npm run lint && npm run test && npm run build && npm run e2e"
   },
   "engines": {
@@ -41,6 +42,7 @@
     "react-icons": "^5.6.0",
     "tailwind-merge": "^3.6.0",
     "tldraw": "^5.1.1",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

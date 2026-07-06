@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
+
+import { ApiError } from "@/server/http/api-error";
+import { withRouteHandler } from "@/server/http/handle-route";
 import { getProjectBundle, upsertProjectDocument } from "@/server/projects/project-repository";
+import { UpdateDocumentBodySchema } from "@/server/schemas/document.schema";
 import type { EditorDocument } from "@/types/project";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function PATCH(request: Request, context: RouteContext) {
-  const { id } = await context.params;
-  const body = await request.json() as { document?: EditorDocument };
+export const PATCH = withRouteHandler(async (request, context) => {
+  const { id } = await (context as RouteContext).params;
+  const body = UpdateDocumentBodySchema.parse(await request.json());
   const bundle = await getProjectBundle(id);
-  if (!bundle || !body.document) {
-    return NextResponse.json({ error: "Proyecto o documento no valido." }, { status: 404 });
+  if (!bundle) {
+    throw ApiError.notFound("Proyecto no encontrado.");
   }
-  await upsertProjectDocument(id, bundle.project.name, body.document);
-  return NextResponse.json({ ok: true });
-}
+  const document = body.document as EditorDocument;
+  await upsertProjectDocument(id, bundle.project.name, document);
+  return NextResponse.json({ ok: true, document });
+});

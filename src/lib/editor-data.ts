@@ -27,30 +27,3 @@ export const categories = [
     ],
   },
 ];
-
-export const projectSeed = [
-  {
-    id: "project-visual-docs",
-    name: "Visual Docs Hub",
-    updatedAt: "Hoy",
-    diagrams: 4,
-  },
-  {
-    id: "project-cloud",
-    name: "Cloud Architecture",
-    updatedAt: "Ayer",
-    diagrams: 7,
-  },
-  {
-    id: "project-mobile",
-    name: "Mobile Checkout",
-    updatedAt: "Jun 12",
-    diagrams: 3,
-  },
-];
-
-export const diagramSeed = [
-  { id: "wireframe-home", name: "Wireframe Home", type: "WIREFRAME" },
-  { id: "checkout-flow", name: "Checkout Flow", type: "FLOWCHART" },
-  { id: "mixed-architecture", name: "Mixed Architecture", type: "MIXED" },
-];

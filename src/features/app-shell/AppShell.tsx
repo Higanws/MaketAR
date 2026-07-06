@@ -10,7 +10,7 @@ import type { DiagramMode, TemplateType, WirePage } from "@/entities/wireframe/w
 import { Dashboard, CreateProjectDialog, DeleteProjectDialog, RenameProjectDialog } from "@/features/dashboard/Dashboard";
 import { EditorShell } from "@/features/editor/EditorShell";
 import { createProject as persistProject, loadProjectDocument, loadProjects, removeProject, updateProject as persistProjectUpdate } from "@/features/projects/project-client";
-import { useEditorStore } from "@/lib/editor-store";
+import { useEditorStore } from "@/stores/editor";
 import { editorStorageVersion } from "@/shared/config/editor";
 import type { EditorDocument } from "@/types/project";
 import { FloatingSettings, type AppTheme } from "./FloatingSettings";

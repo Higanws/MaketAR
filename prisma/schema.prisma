@@ -6,6 +6,8 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Usuario interno de la instancia local. Solo se usa `email` (local@maketar.app).
+/// `password` reservado para auth futura; no implementada en la app actual.
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
@@ -15,34 +17,38 @@ model User {
   updatedAt DateTime  @updatedAt
 }
 
+/// Metadatos del proyecto. El documento del editor vive en `Diagram`.
 model Project {
-  id        String    @id @default(uuid())
-  name      String
-  kind      String    @default("mixed")
-  template  String?
+  id           String    @id @default(uuid())
+  name         String
+  kind         String    @default("mixed")
+  template     String?
   flowTemplate String?
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  diagrams  Diagram[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  diagrams     Diagram[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
+/// Persistencia del `EditorDocument` serializado (`canvasJson` + `viewportJson`).
+/// Hoy la app usa un diagrama MIXED por proyecto vía `project-repository`.
 model Diagram {
-  id            String           @id @default(uuid())
-  projectId     String
-  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name          String
-  type          DiagramType
-  canvasJson    Json
-  viewportJson  Json?
-  thumbnailUrl  String?
-  versions      DiagramVersion[]
-  assets        Asset[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id           String           @id @default(uuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  type         DiagramType
+  canvasJson   Json
+  viewportJson Json?
+  thumbnailUrl String?
+  versions     DiagramVersion[]
+  assets       Asset[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
+/// Historial de versiones — schema reservado; sin uso en código actual.
 model DiagramVersion {
   id        String   @id @default(uuid())
   diagramId String
@@ -51,6 +57,7 @@ model DiagramVersion {
   createdAt DateTime @default(now())
 }
 
+/// Assets adjuntos a diagramas — schema reservado; sin uso en código actual.
 model Asset {
   id        String   @id @default(uuid())
   diagramId String

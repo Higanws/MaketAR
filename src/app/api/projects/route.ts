@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
-import { createProjectBundle, listProjects } from "@/server/projects/project-repository";
-import type { EditorDocument, MaketarProject } from "@/types/project";
 
-export async function GET() {
+import { withRouteHandler } from "@/server/http/handle-route";
+import { EditorDocumentSchema } from "@/server/schemas/document.schema";
+import { CreateProjectBodySchema } from "@/server/schemas/project.schema";
+import { createDefaultProject, createProjectBundle, listProjects } from "@/server/projects/project-repository";
+import type { EditorDocument } from "@/types/project";
+
+export const GET = withRouteHandler(async () => {
   const projects = await listProjects();
   return NextResponse.json({ projects });
-}
+});
 
-export async function POST(request: Request) {
-  const body = await request.json() as { project?: MaketarProject; document?: EditorDocument; name?: string };
-  const project = body.project ?? {
-    id: `project-${Date.now()}`,
-    name: body.name ?? "Nuevo proyecto",
-    kind: "mixed" as const,
-    diagrams: 1,
-    updatedAt: new Date().toISOString(),
-  };
-  const bundle = await createProjectBundle(project, body.document);
+export const POST = withRouteHandler(async (request) => {
+  const body = CreateProjectBodySchema.parse(await request.json());
+  const project = body.project ?? createDefaultProject(body.name ?? "Nuevo proyecto");
+  const document = body.document ? EditorDocumentSchema.parse(body.document) as EditorDocument : undefined;
+  const bundle = await createProjectBundle(project, document);
   return NextResponse.json(bundle, { status: 201 });
-}
+});

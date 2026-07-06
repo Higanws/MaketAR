@@ -103,8 +103,7 @@ Navegador (PWA)
 API Next.js (opcional, Docker)
 ├── GET/POST        /api/projects
 ├── GET/PATCH/DELETE /api/projects/[id]
-├── PATCH           /api/projects/[id]/document
-└── GET             /api/diagrams
+└── PATCH           /api/projects/[id]/document
 
 PostgreSQL + Prisma
 └── Usuario interno fijo local@maketar.app (sin auth remota)
@@ -133,8 +132,7 @@ src/
 │   ├── layout.tsx            # Layout raíz, metadata PWA
 │   ├── pwa-register.tsx      # Registro service worker
 │   └── api/
-│       ├── projects/         # CRUD proyectos + documento
-│       └── diagrams/         # Listado diagramas
+│       └── projects/         # CRUD proyectos + documento
 ├── entities/
 │   ├── flow/
 │   │   ├── flow.types.ts     # FlowNodeVariant, FlowNodeData, edges
@@ -147,7 +145,13 @@ src/
 ├── features/
 │   ├── app-shell/AppShell.tsx       # Orquestador dashboard ↔ editor
 │   ├── dashboard/Dashboard.tsx      # UI proyectos y plantillas
-│   ├── editor/EditorShell.tsx       # ★ Editor monolítico (~3200 líneas)
+│   ├── editor/                      # Editor modularizado
+│   │   ├── EditorShell.tsx          # Orquestador (~630 líneas)
+│   │   ├── flow/                    # FlowNode, DiagramCanvas, utilidades texto
+│   │   ├── wireframe/               # WireframeCanvas, CanvasShape, guías
+│   │   ├── panels/                  # Biblioteca y propiedades
+│   │   ├── library/                 # Drag-drop, IconTile
+│   │   └── hooks/                   # useDiagramClipboard
 │   ├── editor-toolbar/TopToolbar.tsx
 │   ├── export/                      # JSON, PNG, SVG, PDF
 │   ├── icons/icon-catalog.ts        # Lucide, cloud-icons, custom SVG
@@ -157,7 +161,9 @@ src/
 │   └── storage/indexed-db.ts
 ├── server/
 │   ├── db/prisma.ts
-│   └── projects/project-repository.ts
+│   ├── http/                        # ApiError, withRouteHandler
+│   ├── schemas/                     # Validación Zod (project, document)
+│   └── projects/                    # Repositorio dividido (mapper, document, local-user)
 ├── shared/
 │   ├── config/editor.ts
 │   ├── ui/                          # Button, Modal, property-controls…

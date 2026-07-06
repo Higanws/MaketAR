@@ -185,12 +185,29 @@ npm run start        # servir build local de Next
 npm run lint         # eslint
 npm run test         # tests unitarios con Vitest
 npm run test:watch   # tests en watch mode
-npm run e2e          # tests end-to-end con Playwright
+npm run e2e          # tests end-to-end con Playwright (UI mockeada)
+npm run e2e:api      # test e2e opcional contra API real (requiere DATABASE_URL)
 npm run verify       # lint + test + build + e2e
 npm run db:generate  # generar Prisma Client
 npm run db:push      # aplicar schema Prisma a la DB
 npm run db:studio    # abrir Prisma Studio
 ```
+
+### Tests de API (opcional)
+
+El smoke e2e principal mockea `/api/projects`. Para probar la API real contra PostgreSQL:
+
+```bash
+docker compose up -d
+cp .env.example .env
+npm run db:push
+npm run dev
+
+# En otra terminal, con DATABASE_URL configurada:
+DATABASE_URL="postgresql://maketar:maketar@localhost:5432/maketar" npm run e2e:api
+```
+
+El test en `tests/e2e/api-projects.spec.ts` se omite automáticamente si no hay `DATABASE_URL`.
 
 ## Estructura Del Proyecto
 
@@ -224,8 +241,7 @@ Navegador / PWA
 API local Next.js
 ├── /api/projects
 ├── /api/projects/[id]
-├── /api/projects/[id]/document
-└── /api/diagrams
+└── /api/projects/[id]/document
 
 Persistencia
 ├── PostgreSQL

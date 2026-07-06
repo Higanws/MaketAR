@@ -11,21 +11,19 @@ import {
   unmarkLocalProjectDeleted,
 } from "@/lib/storage/indexed-db";
 import type { EditorDocument, MaketarProject } from "@/types/project";
+import { parseApiResponse } from "@/features/projects/project-client-error";
+
+export { ProjectClientError } from "@/features/projects/project-client-error";
 
 type ApiProjectResponse = { projects: MaketarProject[] };
 type ApiProjectOneResponse = { project: MaketarProject; document?: EditorDocument };
 
 const jsonHeaders = { "Content-Type": "application/json" };
-const legacySeedProjects = new Map([
-  ["project-1", "Dashboard SaaS"],
-  ["project-2", "Checkout Flow"],
-  ["project-3", "Arquitectura App"],
-]);
+import { isLegacySeedProject } from "@/shared/config/legacy-seeds";
 
 async function api<T>(url: string, init?: RequestInit) {
   const response = await fetch(url, { ...init, headers: { ...jsonHeaders, ...init?.headers } });
-  if (!response.ok) throw new Error(`API ${response.status}`);
-  return response.json() as Promise<T>;
+  return parseApiResponse<T>(response);
 }
 
 const projectTime = (project: MaketarProject) => {
@@ -74,11 +72,6 @@ export async function loadProjects() {
     return { projects: localProjects.sort(byUpdatedAtDesc), online: false };
   }
 }
-
-function isLegacySeedProject(project: MaketarProject) {
-  return legacySeedProjects.get(project.id) === project.name;
-}
-
 export async function createProject(project: MaketarProject, document?: EditorDocument) {
   await unmarkLocalProjectDeleted(project.id);
   await saveLocalProject(project);
