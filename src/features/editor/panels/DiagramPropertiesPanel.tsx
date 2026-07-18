@@ -1,5 +1,5 @@
 import type { Edge } from "@xyflow/react";
-import { PanelRight } from "lucide-react";
+import { ChevronRight, PanelRight } from "lucide-react";
 
 import {
   applyFlowEdgeLineStyle,
@@ -17,12 +17,14 @@ export function DiagramPropertiesPanel({
   onUpdateNode,
   onUpdateEdge,
   onDeleteEdge,
+  onHide,
 }: {
   selectedNode: FlowNodeType | null;
   selectedEdge: Edge | null;
   onUpdateNode: (id: string, patch: Partial<FlowNodeType>) => void;
   onUpdateEdge: (id: string, patch: Partial<Edge>) => void;
   onDeleteEdge: (id: string) => void;
+  onHide?: () => void;
 }) {
   return (
     <aside className="w-[336px] shrink-0 overflow-auto border-l border-slate-200 bg-white">
@@ -31,8 +33,21 @@ export function DiagramPropertiesPanel({
           <PanelRight size={16} />
           <h2 className="text-sm font-semibold">Propiedades</h2>
         </div>
-        {selectedNode ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">nodo</span> : null}
-        {selectedEdge ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">flecha</span> : null}
+        <div className="flex items-center gap-2">
+          {selectedNode ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">nodo</span> : null}
+          {selectedEdge ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">flecha</span> : null}
+          {onHide ? (
+            <button
+              type="button"
+              className="toolbar-button shrink-0"
+              title="Ocultar propiedades"
+              aria-label="Ocultar propiedades"
+              onClick={onHide}
+            >
+              <ChevronRight size={16} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-5 p-4">

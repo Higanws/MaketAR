@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { Image as ImageIcon, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 
 import type { FlowNodeVariant } from "@/entities/flow/flow.types";
 import type { DiagramMode, WireShape } from "@/entities/wireframe/wireframe.types";
@@ -38,6 +38,7 @@ export function LibraryPanel({
   onAddCustomIcon,
   onAddDiagramIcon,
   onAddDiagramImage,
+  onHide,
 }: {
   mode: DiagramMode;
   pages: { id: string; name: string; shapes: WireShape[] }[];
@@ -54,6 +55,7 @@ export function LibraryPanel({
   onAddCustomIcon: (name: string, svgSrc: string, iconSet?: string) => void;
   onAddDiagramIcon: (iconName: string, iconSet: string, svgSrc?: string, displayLabel?: string) => void;
   onAddDiagramImage: (imageSrc: string, name?: string) => void;
+  onHide?: () => void;
 }) {
   const [tab, setTab] = useState<"library" | "icons" | "pages">("library");
   const [iconSet, setIconSet] = useState("AWS");
@@ -173,13 +175,24 @@ export function LibraryPanel({
 
   return (
     <aside className="relative w-[286px] shrink-0 overflow-auto border-r border-slate-200 bg-white p-4">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">Insertar</h2>
           <p className="text-xs text-slate-500">
             {mode === "diagram" ? "Nodos, conectores y flechas" : "Componentes, paginas e iconos"}
           </p>
         </div>
+        {onHide ? (
+          <button
+            type="button"
+            className="toolbar-button shrink-0"
+            title="Ocultar panel insertar"
+            aria-label="Ocultar panel insertar"
+            onClick={onHide}
+          >
+            <ChevronLeft size={16} />
+          </button>
+        ) : null}
       </div>
 
       {mode === "diagram" ? (

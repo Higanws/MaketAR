@@ -9,6 +9,7 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PanelLeft, PanelRight } from "lucide-react";
 
 import {
   applyFlowEdgeLineStyle,
@@ -35,7 +36,33 @@ import { WireframeCanvas } from "@/features/editor/wireframe/WireframeCanvas";
 import { loadProjectDocument, saveProjectDocument } from "@/features/projects/project-client";
 import { useEditorStore } from "@/stores/editor";
 import { editorStorageVersion } from "@/shared/config/editor";
+import { cn } from "@/lib/utils";
 import type { EditorDocument } from "@/types/project";
+
+const EDITOR_PANELS_STORAGE_KEY = "maketar-editor-panels";
+
+type EditorPanelVisibility = {
+  library: boolean;
+  properties: boolean;
+};
+
+function readEditorPanelVisibility(): EditorPanelVisibility {
+  if (typeof window === "undefined") {
+    return { library: true, properties: true };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EDITOR_PANELS_STORAGE_KEY);
+    if (!raw) return { library: true, properties: true };
+    const parsed = JSON.parse(raw) as Partial<EditorPanelVisibility>;
+    return {
+      library: parsed.library ?? true,
+      properties: parsed.properties ?? true,
+    };
+  } catch {
+    return { library: true, properties: true };
+  }
+}
 
 const sameStringList = (left: string[], right: string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
@@ -122,6 +149,8 @@ export function EditorShell({
   const deletePage = useEditorStore((state) => state.deletePage);
   const markSaved = useEditorStore((state) => state.markSaved);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [showLibraryPanel, setShowLibraryPanel] = useState(() => readEditorPanelVisibility().library);
+  const [showPropertiesPanel, setShowPropertiesPanel] = useState(() => readEditorPanelVisibility().properties);
   const initialDiagramState = getInitialDiagramState(initialDocument);
   const [diagramReady, setDiagramReady] = useState(initialDiagramState.ready);
   const [diagramFlowReady, setDiagramFlowReady] = useState(false);
@@ -372,6 +401,13 @@ export function EditorShell({
     };
   }, [initialDocument, project.id, setDiagramEdges, setDiagramNodes]);
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      EDITOR_PANELS_STORAGE_KEY,
+      JSON.stringify({ library: showLibraryPanel, properties: showPropertiesPanel }),
+    );
+  }, [showLibraryPanel, showPropertiesPanel]);
+
   const saveProject = useCallback(() => {
     void saveProjectDocument(
       project.id,
@@ -514,6 +550,10 @@ export function EditorShell({
           zoom={zoom}
           onToggleGrid={toggleGrid}
           onToggleSnap={toggleSnap}
+          showLibraryPanel={showLibraryPanel}
+          showPropertiesPanel={showPropertiesPanel}
+          onToggleLibraryPanel={() => setShowLibraryPanel((current) => !current)}
+          onTogglePropertiesPanel={() => setShowPropertiesPanel((current) => !current)}
           onFitView={() => {
             setPan({ x: 0, y: 0 });
             setZoom(1);
@@ -537,24 +577,49 @@ export function EditorShell({
           onExportPdf={exportPdf}
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <LibraryPanel
-            mode={mode}
-            pages={pages}
-            currentPageId={currentPageId}
-            onSwitchPage={switchPage}
-            onCreatePage={createPage}
-            onDuplicatePage={duplicatePage}
-            onDeletePage={deletePage}
-            onAddShape={addShape}
-            onAddDiagramNode={addDiagramNode}
-            onAddImage={addImageShape}
-            onAddTemplate={addTemplate}
-            onAddIcon={addIconShape}
-            onAddCustomIcon={addCustomIconShape}
-            onAddDiagramIcon={addDiagramIcon}
-            onAddDiagramImage={addDiagramImage}
-          />
+          {showLibraryPanel ? (
+            <LibraryPanel
+              mode={mode}
+              pages={pages}
+              currentPageId={currentPageId}
+              onSwitchPage={switchPage}
+              onCreatePage={createPage}
+              onDuplicatePage={duplicatePage}
+              onDeletePage={deletePage}
+              onAddShape={addShape}
+              onAddDiagramNode={addDiagramNode}
+              onAddImage={addImageShape}
+              onAddTemplate={addTemplate}
+              onAddIcon={addIconShape}
+              onAddCustomIcon={addCustomIconShape}
+              onAddDiagramIcon={addDiagramIcon}
+              onAddDiagramImage={addDiagramImage}
+              onHide={() => setShowLibraryPanel(false)}
+            />
+          ) : null}
           <div ref={canvasRef} className="relative min-h-0 min-w-0 flex-1 bg-[#e8edf5]">
+            {!showLibraryPanel ? (
+              <button
+                type="button"
+                className={cn("absolute left-3 top-3 z-20 toolbar-button bg-white shadow-sm")}
+                title="Mostrar panel insertar"
+                aria-label="Mostrar panel insertar"
+                onClick={() => setShowLibraryPanel(true)}
+              >
+                <PanelLeft size={16} />
+              </button>
+            ) : null}
+            {!showPropertiesPanel ? (
+              <button
+                type="button"
+                className={cn("absolute right-3 top-3 z-20 toolbar-button bg-white shadow-sm")}
+                title="Mostrar propiedades"
+                aria-label="Mostrar propiedades"
+                onClick={() => setShowPropertiesPanel(true)}
+              >
+                <PanelRight size={16} />
+              </button>
+            ) : null}
             {mode === "wireframe" ? (
               <WireframeCanvas />
             ) : (
@@ -616,17 +681,20 @@ export function EditorShell({
               />
             )}
           </div>
-          {mode === "wireframe" ? (
-            <PropertiesPanel selectedShape={selectedShape} />
-          ) : (
-            <DiagramPropertiesPanel
-              selectedNode={selectedDiagramNode}
-              selectedEdge={selectedDiagramEdge}
-              onUpdateNode={updateDiagramNode}
-              onUpdateEdge={updateDiagramEdge}
-              onDeleteEdge={deleteDiagramEdge}
-            />
-          )}
+          {showPropertiesPanel ? (
+            mode === "wireframe" ? (
+              <PropertiesPanel selectedShape={selectedShape} onHide={() => setShowPropertiesPanel(false)} />
+            ) : (
+              <DiagramPropertiesPanel
+                selectedNode={selectedDiagramNode}
+                selectedEdge={selectedDiagramEdge}
+                onUpdateNode={updateDiagramNode}
+                onUpdateEdge={updateDiagramEdge}
+                onDeleteEdge={deleteDiagramEdge}
+                onHide={() => setShowPropertiesPanel(false)}
+              />
+            )
+          ) : null}
         </div>
       </section>
     </div>

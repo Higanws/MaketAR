@@ -7,6 +7,7 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
+  ChevronRight,
   PanelRight,
 } from "lucide-react";
 
@@ -19,8 +20,10 @@ import { ColorInput, NumberInput, PropertySection, RangeInput } from "@/shared/u
 
 export function PropertiesPanel({
   selectedShape,
+  onHide,
 }: {
   selectedShape: WireShape | null;
+  onHide?: () => void;
 }) {
   const updateShape = useEditorStore((state) => state.updateShape);
   const updateShapeStyle = useEditorStore((state) => state.updateShapeStyle);
@@ -59,7 +62,20 @@ export function PropertiesPanel({
           <PanelRight size={16} />
           <h2 className="text-sm font-semibold">Propiedades</h2>
         </div>
-        {selectedShape ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">{selectedShape.type}</span> : null}
+        <div className="flex items-center gap-2">
+          {selectedShape ? <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">{selectedShape.type}</span> : null}
+          {onHide ? (
+            <button
+              type="button"
+              className="toolbar-button shrink-0"
+              title="Ocultar propiedades"
+              aria-label="Ocultar propiedades"
+              onClick={onHide}
+            >
+              <ChevronRight size={16} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-5 p-4">
