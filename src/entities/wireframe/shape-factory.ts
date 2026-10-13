@@ -1,4 +1,4 @@
-import type { ShapeStyle, WireShape } from "@/stores/editor/editor-store";
+import type { ShapeStyle, WireShape } from "@/entities/wireframe/wireframe.types";
 
 export const defaultStyle: ShapeStyle = {
   fill: "#ffffff",

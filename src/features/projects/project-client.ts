@@ -4,6 +4,7 @@ import {
   getLocalBundles,
   getLocalDocument,
   getLocalProjects,
+  isLocalDocumentPending,
   markLocalProjectDeleted,
   migrateLegacyLocalStorage,
   saveLocalDocument,
@@ -11,7 +12,7 @@ import {
   unmarkLocalProjectDeleted,
 } from "@/lib/storage/indexed-db";
 import type { EditorDocument, MaketarProject } from "@/types/project";
-import { parseApiResponse } from "@/features/projects/project-client-error";
+import { parseApiResponse, ProjectClientError } from "@/features/projects/project-client-error";
 
 export { ProjectClientError } from "@/features/projects/project-client-error";
 
@@ -65,11 +66,14 @@ export async function loadProjects() {
       ({ projects } = await api<ApiProjectResponse>("/api/projects"));
       projects = projects.filter((project) => !deletedProjectIds.has(project.id) && !isLegacySeedProject(project));
     }
+    await syncLocalPendingProjects();
+    ({ projects } = await api<ApiProjectResponse>("/api/projects"));
+    projects = projects.filter((project) => !deletedProjectIds.has(project.id) && !isLegacySeedProject(project));
     const merged = mergeProjects(localProjects, projects).filter((project) => !deletedProjectIds.has(project.id));
     await Promise.all(merged.map((project) => saveLocalProject(project)));
-    return { projects: merged, online: true };
-  } catch {
-    return { projects: localProjects.sort(byUpdatedAtDesc), online: false };
+    return { projects: merged, online: true as const };
+  } catch (error) {
+    return { projects: localProjects.sort(byUpdatedAtDesc), ...syncFailure(error) };
   }
 }
 export async function createProject(project: MaketarProject, document?: EditorDocument) {
@@ -83,9 +87,9 @@ export async function createProject(project: MaketarProject, document?: EditorDo
     });
     await saveLocalProject(result.project);
     if (result.document) await saveLocalDocument(result.project.id, result.document, false);
-    return { project: result.project, online: true };
-  } catch {
-    return { project, online: false };
+    return { project: result.project, online: true as const };
+  } catch (error) {
+    return { project, ...syncFailure(error) };
   }
 }
 
@@ -97,9 +101,9 @@ export async function updateProject(project: MaketarProject) {
       body: JSON.stringify({ project }),
     });
     await saveLocalProject(result.project);
-    return { project: result.project, online: true };
-  } catch {
-    return { project, online: false };
+    return { project: result.project, online: true as const };
+  } catch (error) {
+    return { project, ...syncFailure(error) };
   }
 }
 
@@ -108,24 +112,25 @@ export async function removeProject(projectId: string) {
   await deleteLocalProject(projectId);
   try {
     await api(`/api/projects/${projectId}`, { method: "DELETE" });
-    return { online: true };
-  } catch {
-    return { online: false };
+    return { online: true as const };
+  } catch (error) {
+    return syncFailure(error);
   }
 }
 
 export async function loadProjectDocument(projectId: string) {
   const localDocument = await getLocalDocument(projectId).catch(() => undefined);
+  const pendingSync = await isLocalDocumentPending(projectId).catch(() => false);
   try {
     const result = await api<ApiProjectOneResponse>(`/api/projects/${projectId}`);
-    if (result.document && isRemoteNewer(result.document, localDocument)) {
+    if (result.document && isRemoteNewer(result.document, localDocument, pendingSync)) {
       await saveLocalDocument(projectId, result.document, false);
-      return { document: result.document, online: true };
+      return { document: result.document, online: true as const };
     }
-    if (localDocument) return { document: localDocument, online: true };
-    return { document: result.document, online: true };
-  } catch {
-    return { document: localDocument, online: false };
+    if (localDocument) return { document: localDocument, online: true as const };
+    return { document: result.document, online: true as const };
+  } catch (error) {
+    return { document: localDocument, ...syncFailure(error) };
   }
 }
 
@@ -138,9 +143,9 @@ export async function saveProjectDocument(projectId: string, document: EditorDoc
       body: JSON.stringify({ document: nextDocument }),
     });
     await saveLocalDocument(projectId, nextDocument, false);
-    return { online: true };
-  } catch {
-    return { online: false };
+    return { online: true as const };
+  } catch (error) {
+    return syncFailure(error);
   }
 }
 
@@ -163,8 +168,24 @@ function mergeProjects(local: MaketarProject[], remote: MaketarProject[]) {
   return Array.from(byId.values()).sort(byUpdatedAtDesc);
 }
 
-function isRemoteNewer(remote?: EditorDocument, local?: EditorDocument) {
+function documentTime(value?: string) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isRemoteNewer(remote?: EditorDocument, local?: EditorDocument, pendingSync = false) {
   if (!remote) return false;
   if (!local) return true;
-  return Date.parse(remote.updatedAt ?? "0") >= Date.parse(local.updatedAt ?? "0");
+  const remoteTime = documentTime(remote.updatedAt);
+  const localTime = documentTime(local.updatedAt);
+  if (pendingSync && localTime >= remoteTime) return false;
+  return remoteTime >= localTime;
+}
+
+function syncFailure(error: unknown) {
+  if (error instanceof ProjectClientError) {
+    return { online: false as const, error };
+  }
+  return { online: false as const, offline: true as const };
 }

@@ -2,94 +2,27 @@
 
 import { create, type StateCreator } from "zustand";
 
+import { getShapeBounds } from "@/features/editor/wireframe/alignment-guides";
+import {
+  clonePages,
+  getCurrentShapes,
+  isTemplateType,
+  snapToObjects,
+  updateCurrentPage,
+} from "@/entities/wireframe/page-ops";
 import { makeShape, normalizeShape, normalizeStyle } from "@/entities/wireframe/shape-factory";
 import { createInitialWireframePage, makeTemplateShapes } from "@/entities/wireframe/wireframe-templates";
+import type { DiagramMode, ShapeStyle, TemplateType, WirePage, WireShape } from "@/entities/wireframe/wireframe.types";
 
-export type DiagramMode = "wireframe" | "diagram";
-export type StrokeStyle = "solid" | "dashed" | "dotted";
-export type TextAlign = "left" | "center" | "right";
-export type TemplateType = "dashboard" | "landing" | "mobile" | "form" | "architecture";
-
-export type ShapeStyle = {
-  fill: string;
-  opacity: number;
-  stroke: string;
-  strokeWidth: number;
-  strokeStyle: StrokeStyle;
-  strokeOpacity: number;
-  borderRadius: number;
-  borderTopLeftRadius: number;
-  borderTopRightRadius: number;
-  borderBottomLeftRadius: number;
-  borderBottomRightRadius: number;
-  shadow: {
-    x: number;
-    y: number;
-    blur: number;
-    spread: number;
-    color: string;
-  };
-  rotation: number;
-  fontSize: number;
-  fontFamily: string;
-  fontWeight: number;
-  textColor: string;
-  textAlign: TextAlign;
-};
-
-export type WireShape = {
-  id: string;
-  type:
-    | "icon"
-    | "rect"
-    | "circle"
-    | "text"
-    | "button"
-    | "input"
-    | "card"
-    | "table"
-    | "navbar"
-    | "modal"
-    | "mobile"
-    | "desktop"
-    | "image"
-    | "aws"
-    | "azure"
-    | "gcp"
-    | "kubernetes"
-    | "database"
-    | "network"
-    | "process"
-    | "decision"
-    | "uml"
-    | "devops"
-    | "mindmap"
-    | "server"
-    | "storage"
-    | "api"
-    | "org";
-  name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  text: string;
-  imageSrc?: string;
-  iconName?: string;
-  iconSet?: string;
-  svgSrc?: string;
-  locked: boolean;
-  visible: boolean;
-  layer: number;
-  groupId?: string;
-  style: ShapeStyle;
-};
-
-export type WirePage = {
-  id: string;
-  name: string;
-  shapes: WireShape[];
-};
+export type {
+  DiagramMode,
+  ShapeStyle,
+  StrokeStyle,
+  TemplateType,
+  TextAlign,
+  WirePage,
+  WireShape,
+} from "@/entities/wireframe/wireframe.types";
 
 type HistorySnapshot = {
   pages: WirePage[];
@@ -162,15 +95,6 @@ const createPage = (name: string, shapes: WireShape[] = []) => ({
   shapes,
 });
 
-const clonePages = (pages: WirePage[]) =>
-  pages.map((page) => ({
-    ...page,
-    shapes: page.shapes.map((shape) => ({
-      ...shape,
-      style: { ...shape.style, shadow: { ...shape.style.shadow } },
-    })),
-  }));
-
 const makeSnapshot = (state: EditorState): HistorySnapshot => ({
   pages: clonePages(state.pages),
   currentPageId: state.currentPageId,
@@ -187,107 +111,6 @@ const withHistory = (set: StoreSet) =>
       past: [...state.past.slice(-39), makeSnapshot(state)],
       future: [],
     }));
-
-const getCurrentShapes = (state: Pick<EditorState, "pages" | "currentPageId">) =>
-  state.pages.find((page) => page.id === state.currentPageId)?.shapes ?? [];
-
-const updateCurrentPage = (
-  state: EditorState,
-  updater: (shapes: WireShape[]) => WireShape[],
-) => ({
-  pages: state.pages.map((page) =>
-    page.id === state.currentPageId ? { ...page, shapes: updater(page.shapes) } : page,
-  ),
-});
-
-const frameShapeTypes = new Set<WireShape["type"]>(["desktop", "mobile", "modal"]);
-
-const containsBounds = (
-  frame: WireShape,
-  bounds: { x: number; y: number; width: number; height: number },
-) =>
-  bounds.x >= frame.x &&
-  bounds.y >= frame.y &&
-  bounds.x + bounds.width <= frame.x + frame.width &&
-  bounds.y + bounds.height <= frame.y + frame.height;
-
-const getSameVisualLayerCandidates = (
-  shapes: WireShape[],
-  movingIds: Set<string>,
-  bounds: { x: number; y: number; width: number; height: number },
-) => {
-  const frames = shapes
-    .filter((shape) => shape.visible && frameShapeTypes.has(shape.type) && !movingIds.has(shape.id))
-    .sort((a, b) => a.width * a.height - b.width * b.height);
-  const containingFrame = frames.find((frame) => containsBounds(frame, bounds));
-  const baseCandidates = shapes.filter((shape) => {
-    if (!shape.visible || movingIds.has(shape.id) || frameShapeTypes.has(shape.type)) return false;
-    if (!containingFrame) return true;
-    return containsBounds(containingFrame, shape);
-  });
-
-  return baseCandidates.length
-    ? baseCandidates
-    : shapes.filter((shape) => shape.visible && !movingIds.has(shape.id) && !frameShapeTypes.has(shape.type));
-};
-
-const snapToObjects = (
-  shapes: WireShape[],
-  movingIds: Set<string>,
-  bounds: { x: number; y: number; width: number; height: number },
-) => {
-  const threshold = 10;
-  const candidates = getSameVisualLayerCandidates(shapes, movingIds, bounds);
-  let snapDx = 0;
-  let snapDy = 0;
-  let snappedX = false;
-  let snappedY = false;
-  let bestX = threshold + 1;
-  let bestY = threshold + 1;
-  const movingX = [
-    bounds.x,
-    bounds.x + bounds.width / 2,
-    bounds.x + bounds.width,
-  ];
-  const movingY = [
-    bounds.y,
-    bounds.y + bounds.height / 2,
-    bounds.y + bounds.height,
-  ];
-
-  for (const shape of candidates) {
-    const targetX = [shape.x, shape.x + shape.width / 2, shape.x + shape.width];
-    const targetY = [shape.y, shape.y + shape.height / 2, shape.y + shape.height];
-
-    for (let index = 0; index < movingX.length; index += 1) {
-      const diff = targetX[index] - movingX[index];
-      if (Math.abs(diff) < Math.abs(bestX)) {
-        bestX = diff;
-        snappedX = Math.abs(diff) <= threshold;
-        snapDx = snappedX ? diff : 0;
-      }
-    }
-
-    for (let index = 0; index < movingY.length; index += 1) {
-      const diff = targetY[index] - movingY[index];
-      if (Math.abs(diff) < Math.abs(bestY)) {
-        bestY = diff;
-        snappedY = Math.abs(diff) <= threshold;
-        snapDy = snappedY ? diff : 0;
-      }
-    }
-  }
-
-  return { dx: snapDx, dy: snapDy, snappedX, snappedY };
-};
-
-const getBounds = (shapes: WireShape[]) => {
-  const minX = Math.min(...shapes.map((shape) => shape.x));
-  const minY = Math.min(...shapes.map((shape) => shape.y));
-  const maxX = Math.max(...shapes.map((shape) => shape.x + shape.width));
-  const maxY = Math.max(...shapes.map((shape) => shape.y + shape.height));
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-};
 
 const cloneShapesForInsert = (shapes: WireShape[], offset = 32, nameSuffix = "") => {
   const now = Date.now();
@@ -314,9 +137,6 @@ const cloneShapesForInsert = (shapes: WireShape[], offset = 32, nameSuffix = "")
     });
   });
 };
-
-const isTemplateType = (kind: DiagramMode | "mixed" | TemplateType): kind is TemplateType =>
-  ["dashboard", "landing", "mobile", "form", "architecture"].includes(kind);
 
 export const useEditorStore = create<EditorState>((set, get) => {
   const commit = withHistory(set);
@@ -455,7 +275,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const shapesToAdd = makeTemplateShapes(template);
         const positionedShapes = center
           ? (() => {
-              const bounds = getBounds(shapesToAdd);
+              const bounds = getShapeBounds(shapesToAdd);
               const dx = Math.round(center.x - (bounds.x + bounds.width / 2));
               const dy = Math.round(center.y - (bounds.y + bounds.height / 2));
               return shapesToAdd.map((shape) => ({ ...shape, x: shape.x + dx, y: shape.y + dy }));
@@ -496,7 +316,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         groupId ? shape.groupId === groupId && !shape.locked : shape.id === id && !shape.locked,
       );
       const movingIds = new Set(movingShapes.map((shape) => shape.id));
-      const currentBounds = getBounds(movingShapes);
+      const currentBounds = getShapeBounds(movingShapes);
       let dx = nx - shapeToMove.x;
       let dy = ny - shapeToMove.y;
       if (state.snapToGrid) {
@@ -646,7 +466,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
           .filter((shape) => state.selectedIds.includes(shape.id) && !shape.locked);
         if (!selectedShapes.length) return {};
 
-        const selectedBounds = getBounds(selectedShapes);
+        const selectedBounds = getShapeBounds(selectedShapes);
         const primary = selectedShapes.find((shape) => shape.id === state.selectedId) ?? selectedShapes[0];
         const frames = getCurrentShapes(state).filter((shape) =>
           ["desktop", "mobile", "modal"].includes(shape.type) && !state.selectedIds.includes(shape.id),

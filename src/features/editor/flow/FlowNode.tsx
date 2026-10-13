@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  Handle,
   Node,
   NodeProps,
   NodeResizer,
-  Position,
   useInternalNode,
   useUpdateNodeInternals,
 } from "@xyflow/react";
@@ -24,26 +22,13 @@ import {
   getFlowNodeTextScale,
   resolveFlowNodeDimensions,
 } from "@/features/editor/flow/flow-node-text";
+import { FlowNodeHandles } from "@/features/editor/flow/FlowNodeHandles";
+import { FlowNodeLabel } from "@/features/editor/flow/FlowNodeLabel";
 import { iconLookup } from "@/features/icons/icon-catalog";
 import { cn } from "@/lib/utils";
 import { withAlpha } from "@/shared/lib/export-utils";
 
 const FLOW_NODE_STROKE_WIDTH = 2.5;
-const FLOW_HANDLE_SIZE = 14;
-const flowHandleClass = "!z-20 !rounded-full !border-2 !border-white !bg-blue-500 !shadow-md";
-const flowHandlePositions = [
-  { id: "top", position: Position.Top, style: { top: 0, left: "50%", transform: "translate(-50%, -50%)" } },
-  { id: "right", position: Position.Right, style: { top: "50%", left: "100%", transform: "translate(-50%, -50%)" } },
-  { id: "bottom", position: Position.Bottom, style: { top: "100%", left: "50%", transform: "translate(-50%, -50%)" } },
-  { id: "left", position: Position.Left, style: { top: "50%", left: 0, transform: "translate(-50%, -50%)" } },
-] as const;
-
-const flowHandleStyle = {
-  width: FLOW_HANDLE_SIZE,
-  height: FLOW_HANDLE_SIZE,
-  minWidth: FLOW_HANDLE_SIZE,
-  minHeight: FLOW_HANDLE_SIZE,
-};
 
 export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<FlowNodeData>>) {
   const updateNodeInternals = useUpdateNodeInternals();
@@ -90,20 +75,7 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
         minHeight={isIcon ? 40 : 48}
         color="#3b82f6"
       />
-      {!isGroup && !isImage ? (
-        <>
-          {flowHandlePositions.map((handle) => (
-            <Handle
-              key={`${handle.id}-source`}
-              id={`${handle.id}-source`}
-              type="source"
-              position={handle.position}
-              className={flowHandleClass}
-              style={{ ...flowHandleStyle, ...handle.style }}
-            />
-          ))}
-        </>
-      ) : null}
+      {!isGroup && !isImage ? <FlowNodeHandles /> : null}
       {isDecision ? (
         <svg className="pointer-events-none absolute inset-0 size-full overflow-visible drop-shadow-sm" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <polygon
@@ -161,11 +133,11 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
       ) : null}
       {isGroup ? (
         <div
-          className="flex size-full min-h-0 items-center justify-center rounded-lg border-2 border-dashed"
-          style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke, ...flowPadding }}
+          className="flex size-full min-h-0 items-start justify-start rounded-lg border-2 border-dashed px-3 py-2"
+          style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke }}
         >
           <textarea
-            className={cn(flowTextareaBaseClass, "font-bold uppercase tracking-[0.08em]")}
+            className={cn(flowTextareaBaseClass, "text-left font-bold uppercase tracking-[0.08em]")}
             style={flowTextStyle}
             rows={1}
             value={data.label}
@@ -195,7 +167,9 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
           justifyContent: isText ? flowTextHorizontalAlignStyle[textAlign] : "center",
         }}
       >
-        <textarea
+        <FlowNodeLabel
+          id={id}
+          label={data.label}
           className={cn(
             flowTextareaBaseClass,
             "font-semibold",
@@ -208,10 +182,7 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
             ...flowTextStyle,
             ...(isDecision ? { maxWidth: Math.max(40, nodeWidth * 0.58) } : {}),
           }}
-          rows={1}
-          value={data.label}
-          onChange={(event) => data.onChange?.(id, event.target.value)}
-          onPointerDown={(event) => event.stopPropagation()}
+          onChange={data.onChange}
         />
       </div>
     </div>

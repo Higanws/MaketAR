@@ -94,6 +94,11 @@ export async function getLocalDocument(projectId: string) {
   return record?.document;
 }
 
+export async function isLocalDocumentPending(projectId: string) {
+  const record = await tx<DocumentRecord | undefined>(documentsStore, "readonly", (store) => store.get(projectId));
+  return Boolean(record?.pendingSync);
+}
+
 export async function saveLocalDocument(projectId: string, document: EditorDocument, pendingSync = false) {
   await tx<IDBValidKey>(documentsStore, "readwrite", (store) =>
     store.put({ projectId, document: { ...document, updatedAt: document.updatedAt ?? new Date().toISOString() }, pendingSync }),

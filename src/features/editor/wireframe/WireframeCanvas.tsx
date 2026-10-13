@@ -5,16 +5,17 @@ import {
   handleLibraryDragOver,
   parseLibraryDragPayload,
 } from "@/features/editor/library/drag-drop";
+import { AlignmentGuideLayer } from "@/features/editor/wireframe/AlignmentGuideLayer";
 import {
   type AlignmentGuide,
   getAlignmentGuides,
   getShapeBounds,
 } from "@/features/editor/wireframe/alignment-guides";
-import {
-  CanvasShape,
-  ContextMenuButton,
-  type ResizeDraft,
-} from "@/features/editor/wireframe/CanvasShape";
+import { CanvasShape, type ResizeDraft } from "@/features/editor/wireframe/CanvasShape";
+import { clientToCanvas } from "@/features/editor/wireframe/canvas-coords";
+import { MarqueeOverlay } from "@/features/editor/wireframe/MarqueeOverlay";
+import { getResizeGeometry } from "@/features/editor/wireframe/resize-geometry";
+import { WireframeContextMenu } from "@/features/editor/wireframe/WireframeContextMenu";
 import { useEditorStore } from "@/stores/editor";
 
 export function WireframeCanvas() {
@@ -77,12 +78,8 @@ export function WireframeCanvas() {
   );
 
   const pointerToCanvasFromClient = useCallback((clientX: number, clientY: number) => {
-    const bounds = canvasRef.current?.getBoundingClientRect();
-    return {
-      x: (clientX - (bounds?.left ?? 0) - pan.x) / zoom,
-      y: (clientY - (bounds?.top ?? 0) - pan.y) / zoom,
-    };
-  }, [pan.x, pan.y, zoom]);
+    return clientToCanvas(clientX, clientY, canvasRef.current?.getBoundingClientRect(), pan, zoom);
+  }, [pan, zoom]);
 
   const pointerToCanvas = (event: PointerEvent) => {
     return pointerToCanvasFromClient(event.clientX, event.clientY);
@@ -172,50 +169,6 @@ export function WireframeCanvas() {
     [pan.x, pan.y, setPan, setZoom, zoom],
   );
 
-  const getResizeGeometry = useCallback((draft: ResizeDraft, point: { x: number; y: number }, keepRatio: boolean) => {
-    const dx = point.x - draft.startX;
-    const dy = point.y - draft.startY;
-    const left = draft.handle.includes("w");
-    const right = draft.handle.includes("e");
-    const top = draft.handle.includes("n");
-    const bottom = draft.handle.includes("s");
-    const aspect = draft.shape.width / Math.max(1, draft.shape.height);
-    let nextWidth = left ? draft.shape.width - dx : right ? draft.shape.width + dx : draft.shape.width;
-    let nextHeight = top ? draft.shape.height - dy : bottom ? draft.shape.height + dy : draft.shape.height;
-
-    if (keepRatio) {
-      const widthChanged = left || right;
-      const heightChanged = top || bottom;
-      if (widthChanged && heightChanged) {
-        if (Math.abs(nextWidth - draft.shape.width) >= Math.abs(nextHeight - draft.shape.height)) {
-          nextHeight = nextWidth / aspect;
-        } else {
-          nextWidth = nextHeight * aspect;
-        }
-      } else if (widthChanged) {
-        nextHeight = nextWidth / aspect;
-      } else if (heightChanged) {
-        nextWidth = nextHeight * aspect;
-      }
-    }
-
-    nextWidth = Math.max(24, nextWidth);
-    nextHeight = Math.max(24, nextHeight);
-
-    const nextX = left
-      ? draft.shape.x + draft.shape.width - nextWidth
-      : keepRatio && (top || bottom)
-        ? draft.shape.x + (draft.shape.width - nextWidth) / 2
-        : draft.shape.x;
-    const nextY = top
-      ? draft.shape.y + draft.shape.height - nextHeight
-      : keepRatio && (left || right)
-        ? draft.shape.y + (draft.shape.height - nextHeight) / 2
-        : draft.shape.y;
-
-    return { x: nextX, y: nextY, width: nextWidth, height: nextHeight };
-  }, []);
-
   useEffect(() => {
     if (!drag && !resize && !rotate && !canvasDrag && !marquee) return;
 
@@ -284,7 +237,6 @@ export function WireframeCanvas() {
     resizeShape,
     findShapesInRect,
     getMarqueeRect,
-    getResizeGeometry,
     selectShapes,
     setPan,
     rotate,
@@ -384,49 +336,6 @@ export function WireframeCanvas() {
         const direction = event.deltaY > 0 ? -1 : 1;
         zoomAtPoint(event.clientX, event.clientY, zoom + direction * 0.12);
       }}
-      onPointerMove={(event) => {
-        if (drag) {
-          ensureInteractionCheckpoint();
-          const point = pointerToCanvas(event);
-          updateDragGuides(drag.id, Math.round(point.x - drag.dx), Math.round(point.y - drag.dy));
-          moveShape(drag.id, Math.round(point.x - drag.dx), Math.round(point.y - drag.dy));
-        }
-        if (resize) {
-          ensureInteractionCheckpoint();
-          const point = pointerToCanvas(event);
-          const next = getResizeGeometry(resize, point, event.ctrlKey);
-          updateResizeGuides(resize.id, next.x, next.y, next.width, next.height);
-          resizeShape(resize.id, next.width, next.height, next.x, next.y);
-        }
-        if (rotate) {
-          ensureInteractionCheckpoint();
-          const point = pointerToCanvas(event);
-          const angle = Math.atan2(point.y - rotate.centerY, point.x - rotate.centerX) * 180 / Math.PI;
-          rotateShape(rotate.id, Math.round(rotate.startRotation + angle - rotate.startAngle));
-        }
-        if (canvasDrag) {
-          setPan({ x: canvasDrag.px + event.clientX - canvasDrag.x, y: canvasDrag.py + event.clientY - canvasDrag.y });
-        }
-        if (marquee) {
-          const point = pointerToCanvas(event);
-          setMarquee((current) => current ? { ...current, currentX: point.x, currentY: point.y } : current);
-        }
-      }}
-      onPointerUp={() => {
-        if (marquee) {
-          const rect = getMarqueeRect(marquee);
-          if (rect.width > 4 || rect.height > 4) {
-            selectShapes(findShapesInRect(rect), marquee.additive);
-          }
-        }
-        setDrag(null);
-        setResize(null);
-        setRotate(null);
-        setCanvasDrag(null);
-        setMarquee(null);
-        setAlignmentGuides([]);
-        interactionCheckpointRef.current = false;
-      }}
       onPointerLeave={() => {
         if (!drag && !resize && !rotate && !canvasDrag && !marquee) {
           setDrag(null);
@@ -514,53 +423,21 @@ export function WireframeCanvas() {
       <div className="absolute bottom-4 left-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
         Zoom {Math.round(zoom * 100)}%
       </div>
-      {marquee ? (
-        <div
-          className="pointer-events-none absolute z-40 border border-blue-500 bg-blue-500/10"
-          style={{
-            left: pan.x + getMarqueeRect(marquee).x * zoom,
-            top: pan.y + getMarqueeRect(marquee).y * zoom,
-            width: getMarqueeRect(marquee).width * zoom,
-            height: getMarqueeRect(marquee).height * zoom,
-          }}
-        />
-      ) : null}
-      {alignmentGuides.map((guide) => (
-        <div
-          key={`${guide.orientation}-${guide.position}`}
-          className="pointer-events-none absolute z-30 bg-blue-500/70"
-          style={
-            guide.orientation === "vertical"
-              ? {
-                  left: pan.x + guide.position * zoom,
-                  top: 0,
-                  width: 1,
-                  height: "100%",
-                }
-              : {
-                  left: 0,
-                  top: pan.y + guide.position * zoom,
-                  width: "100%",
-                  height: 1,
-                }
-          }
-        />
-      ))}
+      {marquee ? <MarqueeOverlay rect={getMarqueeRect(marquee)} pan={pan} zoom={zoom} /> : null}
+      <AlignmentGuideLayer guides={alignmentGuides} pan={pan} zoom={zoom} />
       {contextMenu ? (
-        <div
-          className="fixed z-50 w-44 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-xl"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <ContextMenuButton label="Duplicar" onClick={() => { duplicateShape(); setContextMenu(null); }} />
-          <ContextMenuButton label="Agrupar seleccion" disabled={selectedIds.length < 2} onClick={() => { groupSelected(); setContextMenu(null); }} />
-          <ContextMenuButton label="Desagrupar" onClick={() => { ungroupSelected(); setContextMenu(null); }} />
-          <ContextMenuButton label="Traer al frente" onClick={() => { bringForward(); setContextMenu(null); }} />
-          <ContextMenuButton label="Enviar al fondo" onClick={() => { sendBackward(); setContextMenu(null); }} />
-          <ContextMenuButton label="Bloquear / desbloquear" onClick={() => { toggleShapeLock(contextMenu.id); setContextMenu(null); }} />
-          <div className="my-1 h-px bg-slate-200" />
-          <ContextMenuButton danger label="Eliminar" onClick={() => { deleteSelected(); setContextMenu(null); }} />
-        </div>
+        <WireframeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          selectedCount={selectedIds.length}
+          onDuplicate={() => { duplicateShape(); setContextMenu(null); }}
+          onGroup={() => { groupSelected(); setContextMenu(null); }}
+          onUngroup={() => { ungroupSelected(); setContextMenu(null); }}
+          onBringForward={() => { bringForward(); setContextMenu(null); }}
+          onSendBackward={() => { sendBackward(); setContextMenu(null); }}
+          onToggleLock={() => { toggleShapeLock(contextMenu.id); setContextMenu(null); }}
+          onDelete={() => { deleteSelected(); setContextMenu(null); }}
+        />
       ) : null}
     </div>
   );

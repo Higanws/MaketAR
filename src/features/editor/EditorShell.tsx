@@ -1,110 +1,30 @@
 "use client";
 
-import {
-  Edge,
-  MarkerType,
-  addEdge,
-  reconnectEdge,
-  useEdgesState,
-  useNodesState,
-} from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { PanelLeft, PanelRight } from "lucide-react";
 
-import {
-  applyFlowEdgeLineStyle,
-  defaultFlowSourceHandle,
-  defaultFlowTargetHandle,
-  flowNodeDefaults,
-  normalizeConnection,
-  normalizeFlowEdges,
-} from "@/entities/flow/flow-templates";
-import type { FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
 import type { Project } from "@/entities/project/project.types";
 import type { DiagramMode } from "@/entities/wireframe/wireframe.types";
-import { exportJson, exportSvg } from "@/features/export/export-actions";
-import { exportPdfFromElement } from "@/features/export/export-pdf";
-import { exportPngFromElement } from "@/features/export/export-png";
 import { TopToolbar } from "@/features/editor-toolbar/TopToolbar";
+import { connectFlowEdge, reconnectFlowEdge } from "@/features/editor/flow/connect-flow-edge";
 import { DiagramCanvas } from "@/features/editor/flow/DiagramCanvas";
 import { useDiagramClipboard } from "@/features/editor/hooks/useDiagramClipboard";
-import { diagramNodeTools } from "@/features/editor/library/library-constants";
+import { useDiagramDocument } from "@/features/editor/hooks/useDiagramDocument";
+import { useDiagramGraph } from "@/features/editor/hooks/useDiagramGraph";
+import { useEditorAutosave } from "@/features/editor/hooks/useEditorAutosave";
+import { useEditorHotkeys } from "@/features/editor/hooks/useEditorHotkeys";
+import { useEditorPanelVisibility } from "@/features/editor/hooks/useEditorPanelVisibility";
 import { DiagramPropertiesPanel } from "@/features/editor/panels/DiagramPropertiesPanel";
 import { LibraryPanel } from "@/features/editor/panels/LibraryPanel";
 import { PropertiesPanel } from "@/features/editor/panels/PropertiesPanel";
 import { WireframeCanvas } from "@/features/editor/wireframe/WireframeCanvas";
-import { loadProjectDocument, saveProjectDocument } from "@/features/projects/project-client";
+import { exportJson, exportSvg } from "@/features/export/export-actions";
+import { exportPdfFromElement } from "@/features/export/export-pdf";
+import { exportPngFromElement } from "@/features/export/export-png";
 import { useEditorStore } from "@/stores/editor";
 import { editorStorageVersion } from "@/shared/config/editor";
 import { cn } from "@/lib/utils";
 import type { EditorDocument } from "@/types/project";
-
-const EDITOR_PANELS_STORAGE_KEY = "maketar-editor-panels";
-
-type EditorPanelVisibility = {
-  library: boolean;
-  properties: boolean;
-};
-
-function readEditorPanelVisibility(): EditorPanelVisibility {
-  if (typeof window === "undefined") {
-    return { library: true, properties: true };
-  }
-
-  try {
-    const raw = window.localStorage.getItem(EDITOR_PANELS_STORAGE_KEY);
-    if (!raw) return { library: true, properties: true };
-    const parsed = JSON.parse(raw) as Partial<EditorPanelVisibility>;
-    return {
-      library: parsed.library ?? true,
-      properties: parsed.properties ?? true,
-    };
-  } catch {
-    return { library: true, properties: true };
-  }
-}
-
-const sameStringList = (left: string[], right: string[]) =>
-  left.length === right.length && left.every((item, index) => item === right[index]);
-
-function getImageNodeSize(imageSrc: string, fallback: { width: number; height: number }) {
-  return new Promise<{ width: number; height: number }>((resolve) => {
-    if (typeof window === "undefined") {
-      resolve(fallback);
-      return;
-    }
-
-    const image = new window.Image();
-    image.onload = () => {
-      const naturalWidth = image.naturalWidth || fallback.width;
-      const naturalHeight = image.naturalHeight || fallback.height;
-      const maxWidth = 260;
-      const maxHeight = 220;
-      const minWidth = 96;
-      const minHeight = 72;
-      const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight, 1);
-      resolve({
-        width: Math.max(minWidth, Math.round(naturalWidth * scale)),
-        height: Math.max(minHeight, Math.round(naturalHeight * scale)),
-      });
-    };
-    image.onerror = () => resolve(fallback);
-    image.src = imageSrc;
-  });
-}
-
-function getInitialDiagramState(document: EditorDocument | null) {
-  if (!document) {
-    return { nodes: [] as FlowNodeType[], edges: [] as Edge[], ready: false };
-  }
-
-  const nodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : [];
-  const edges = Array.isArray(document.diagramEdges)
-    ? normalizeFlowEdges(document.diagramEdges as Edge[], nodes, { repairHandles: true })
-    : [];
-
-  return { nodes, edges, ready: true };
-}
 
 export function EditorShell({
   project,
@@ -149,376 +69,71 @@ export function EditorShell({
   const deletePage = useEditorStore((state) => state.deletePage);
   const markSaved = useEditorStore((state) => state.markSaved);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [showLibraryPanel, setShowLibraryPanel] = useState(() => readEditorPanelVisibility().library);
-  const [showPropertiesPanel, setShowPropertiesPanel] = useState(() => readEditorPanelVisibility().properties);
-  const initialDiagramState = getInitialDiagramState(initialDocument);
-  const [diagramReady, setDiagramReady] = useState(initialDiagramState.ready);
-  const [diagramFlowReady, setDiagramFlowReady] = useState(false);
-  const [diagramNodes, setDiagramNodes, onDiagramNodesChange] = useNodesState<FlowNodeType>(initialDiagramState.nodes);
-  const [diagramEdges, setDiagramEdges, onDiagramEdgesChange] = useEdgesState(initialDiagramState.edges);
-  const [selectedDiagramNodeId, setSelectedDiagramNodeId] = useState<string | null>(null);
-  const [selectedDiagramEdgeId, setSelectedDiagramEdgeId] = useState<string | null>(null);
-  const [selectedDiagramNodeIds, setSelectedDiagramNodeIds] = useState<string[]>([]);
-  const [selectedDiagramEdgeIds, setSelectedDiagramEdgeIds] = useState<string[]>([]);
+  const panels = useEditorPanelVisibility();
+  const graph = useDiagramGraph(initialDocument);
   const shapes = useMemo(
     () => pages.find((page) => page.id === currentPageId)?.shapes ?? [],
     [pages, currentPageId],
   );
   const selectedShape = shapes.find((shape) => shape.id === selectedId) ?? null;
-  const selectedDiagramNode = diagramNodes.find((node) => node.id === selectedDiagramNodeId) ?? null;
-  const selectedDiagramEdge = diagramEdges.find((edge) => edge.id === selectedDiagramEdgeId) ?? null;
-
-  const {
-    copyDiagramSelection,
-    pasteDiagramClipboard,
-    duplicateDiagramSelection,
-    duplicateDiagramNode,
-  } = useDiagramClipboard({
-    diagramNodes,
-    selectedDiagramNodeIds,
-    setDiagramNodes,
+  const selectedDiagramNode = graph.diagramNodes.find((node) => node.id === graph.selectedDiagramNodeId) ?? null;
+  const selectedDiagramEdge = graph.diagramEdges.find((edge) => edge.id === graph.selectedDiagramEdgeId) ?? null;
+  const clipboard = useDiagramClipboard({
+    diagramNodes: graph.diagramNodes,
+    selectedDiagramNodeIds: graph.selectedDiagramNodeIds,
+    setDiagramNodes: graph.setDiagramNodes,
     selectionSetters: {
-      setSelectedDiagramNodeId,
-      setSelectedDiagramEdgeId,
-      setSelectedDiagramNodeIds,
-      setSelectedDiagramEdgeIds,
+      setSelectedDiagramNodeId: graph.setSelectedDiagramNodeId,
+      setSelectedDiagramEdgeId: graph.setSelectedDiagramEdgeId,
+      setSelectedDiagramNodeIds: graph.setSelectedDiagramNodeIds,
+      setSelectedDiagramEdgeIds: graph.setSelectedDiagramEdgeIds,
     },
   });
 
-  const updateDiagramNodeLabel = useCallback((id: string, label: string) => {
-    setDiagramNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, label } } : node,
-      ),
-    );
-  }, [setDiagramNodes]);
+  useDiagramDocument({
+    projectId: project.id,
+    initialDocument,
+    setDiagramNodes: graph.setDiagramNodes,
+    setDiagramEdges: graph.setDiagramEdges,
+    setDiagramReady: graph.setDiagramReady,
+    setDiagramFlowReady: graph.setDiagramFlowReady,
+  });
 
-  const addDiagramNode = useCallback((variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => {
-    const nodeCount = diagramNodes.length + 1;
-    const defaultLabel = label ?? diagramNodeTools.find((tool) => tool.variant === variant)?.label ?? "Nodo";
-    const defaults = flowNodeDefaults[variant];
-    const position = center
-      ? { x: Math.round(center.x - defaults.width / 2), y: Math.round(center.y - defaults.height / 2) }
-      : { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 };
-    const node: FlowNodeType = {
-      id: `flow-node-${Date.now()}`,
-      type: "maketarFlow",
-      position,
-      width: defaults.width,
-      height: defaults.height,
-      style: { width: defaults.width, height: defaults.height },
-      zIndex: variant === "group" ? -1 : undefined,
-      selected: variant !== "group",
-      data: {
-        label: defaultLabel,
-        variant,
-        fill: defaults.fill,
-        stroke: defaults.stroke,
-        textColor: defaults.textColor,
-      },
-    };
-    setDiagramNodes((nodes) =>
-      variant === "group"
-        ? [node, ...nodes.map((item) => ({ ...item, selected: false }))]
-        : [...nodes, node],
-    );
-  }, [diagramNodes.length, setDiagramNodes]);
+  const saveProject = useEditorAutosave({
+    projectId: project.id,
+    diagramReady: graph.diagramReady,
+    diagramFlowReady: graph.diagramFlowReady,
+    mode,
+    pages,
+    currentPageId,
+    zoom,
+    showGrid,
+    snapToGrid,
+    gridSize,
+    diagramNodes: graph.diagramNodes,
+    diagramEdges: graph.diagramEdges,
+    markSaved,
+  });
 
-  const addDiagramIcon = useCallback((iconName: string, iconSet: string, svgSrc?: string, displayLabel?: string, center?: { x: number; y: number }) => {
-    const nodeCount = diagramNodes.length + 1;
-    const defaults = flowNodeDefaults.icon;
-    const position = center
-      ? { x: Math.round(center.x - defaults.width / 2), y: Math.round(center.y - defaults.height / 2) }
-      : { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 };
-    setDiagramNodes((nodes) => [
-      ...nodes,
-      {
-        id: `flow-icon-${Date.now()}`,
-        type: "maketarFlow",
-        position,
-        width: defaults.width,
-        height: defaults.height,
-        style: { width: defaults.width, height: defaults.height },
-        data: {
-          label: displayLabel ?? iconName.replace(/^Tb/, ""),
-          variant: "icon",
-          iconName,
-          iconSet,
-          svgSrc,
-          fill: defaults.fill,
-          stroke: defaults.stroke,
-          textColor: defaults.textColor,
-        },
-      },
-    ]);
-  }, [diagramNodes.length, setDiagramNodes]);
-
-  const addDiagramImage = useCallback((imageSrc: string, name = "Imagen") => {
-    const nodeCount = diagramNodes.length + 1;
-    const defaults = flowNodeDefaults.image;
-    void getImageNodeSize(imageSrc, { width: defaults.width, height: defaults.height }).then((size) => {
-      setDiagramNodes((nodes) => [
-        ...nodes,
-        {
-          id: `flow-image-${Date.now()}`,
-          type: "maketarFlow",
-          position: { x: 180 + (nodeCount % 3) * 210, y: 160 + Math.floor(nodeCount / 3) * 130 },
-          style: { width: size.width, height: size.height },
-          data: {
-            label: name.replace(/\.[^.]+$/i, "") || "Imagen",
-            variant: "image",
-            imageSrc,
-            fill: defaults.fill,
-            stroke: defaults.stroke,
-            textColor: defaults.textColor,
-          },
-        },
-      ]);
-    });
-  }, [diagramNodes.length, setDiagramNodes]);
-
-  const updateDiagramNode = useCallback((id: string, patch: Partial<FlowNodeType>) => {
-    setDiagramNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              ...patch,
-              data: { ...node.data, ...patch.data },
-              position: patch.position ?? node.position,
-            }
-          : node,
-      ),
-    );
-  }, [setDiagramNodes]);
-
-  const updateDiagramEdge = useCallback((id: string, patch: Partial<Edge>) => {
-    setDiagramEdges((edges) => edges.map((edge) => edge.id === id ? { ...edge, ...patch } : edge));
-  }, [setDiagramEdges]);
-
-  const deleteDiagramSelection = useCallback(() => {
-    if (!selectedDiagramNodeIds.length && !selectedDiagramEdgeIds.length) return;
-    const nodeIds = new Set(selectedDiagramNodeIds);
-    const edgeIds = new Set(selectedDiagramEdgeIds);
-    setDiagramNodes((nodes) => nodes.filter((node) => !nodeIds.has(node.id)));
-    setDiagramEdges((edges) =>
-      edges.filter(
-        (edge) =>
-          !edgeIds.has(edge.id) &&
-          !nodeIds.has(edge.source) &&
-          !nodeIds.has(edge.target),
-      ),
-    );
-    setSelectedDiagramNodeId(null);
-    setSelectedDiagramEdgeId(null);
-    setSelectedDiagramNodeIds([]);
-    setSelectedDiagramEdgeIds([]);
-  }, [selectedDiagramEdgeIds, selectedDiagramNodeIds, setDiagramEdges, setDiagramNodes]);
-
-  const deleteDiagramNode = useCallback((id: string) => {
-    setDiagramNodes((nodes) => nodes.filter((node) => node.id !== id));
-    setDiagramEdges((edges) => edges.filter((edge) => edge.source !== id && edge.target !== id));
-    setSelectedDiagramNodeIds((ids) => ids.filter((nodeId) => nodeId !== id));
-    setSelectedDiagramNodeId((current) => current === id ? null : current);
-  }, [setDiagramEdges, setDiagramNodes]);
-
-  const deleteDiagramEdge = useCallback((id: string) => {
-    setDiagramEdges((edges) => edges.filter((edge) => edge.id !== id));
-    setSelectedDiagramEdgeIds((ids) => ids.filter((edgeId) => edgeId !== id));
-    setSelectedDiagramEdgeId((current) => current === id ? null : current);
-  }, [setDiagramEdges]);
-
-  const diagramNodesWithHandlers = useMemo(
-    () =>
-      diagramNodes.map((node) => {
-        const defaults = flowNodeDefaults[node.data.variant];
-        const styleWidth = node.style?.width;
-        const styleHeight = node.style?.height;
-        const resolvedWidth = node.width ?? (typeof styleWidth === "number" ? styleWidth : defaults.width);
-        const resolvedHeight = node.height ?? (typeof styleHeight === "number" ? styleHeight : defaults.height);
-
-        return {
-          ...node,
-          width: resolvedWidth,
-          height: resolvedHeight,
-          data: { ...node.data, onChange: updateDiagramNodeLabel },
-        };
-      }),
-    [diagramNodes, updateDiagramNodeLabel],
-  );
-
-  const handleDiagramFlowReady = useCallback(() => {
-    setDiagramFlowReady(true);
-  }, []);
+  useEditorHotkeys({
+    mode,
+    selectedCount: selectedIds.length,
+    undo,
+    redo,
+    copyDiagramSelection: clipboard.copyDiagramSelection,
+    pasteDiagramClipboard: clipboard.pasteDiagramClipboard,
+    duplicateDiagramSelection: clipboard.duplicateDiagramSelection,
+    deleteDiagramSelection: graph.deleteDiagramSelection,
+    copySelected,
+    pasteClipboard,
+    duplicateShape,
+    deleteSelected,
+  });
 
   const handleModeChange = useCallback((nextMode: DiagramMode) => {
-    if (nextMode === "diagram") {
-      setDiagramFlowReady(false);
-    }
+    if (nextMode === "diagram") graph.setDiagramFlowReady(false);
     setMode(nextMode);
-  }, [setMode]);
-
-  const handleDiagramSelectionChange = useCallback((nodeIds: string[], edgeIds: string[]) => {
-    if (sameStringList(nodeIds, selectedDiagramNodeIds) && sameStringList(edgeIds, selectedDiagramEdgeIds)) {
-      return;
-    }
-
-    setSelectedDiagramNodeIds(nodeIds);
-    setSelectedDiagramEdgeIds(edgeIds);
-    setSelectedDiagramNodeId(nodeIds[0] ?? null);
-    setSelectedDiagramEdgeId(edgeIds[0] ?? null);
-  }, [selectedDiagramEdgeIds, selectedDiagramNodeIds]);
-
-  useEffect(() => {
-    let alive = true;
-    const applyDocument = (document: EditorDocument) => {
-      const nextDiagramNodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : [];
-      useEditorStore.getState().hydrate(document);
-      setDiagramNodes(nextDiagramNodes);
-      setDiagramEdges(Array.isArray(document.diagramEdges) ? normalizeFlowEdges(document.diagramEdges as Edge[], nextDiagramNodes, { repairHandles: true }) : []);
-      setDiagramFlowReady(false);
-      setDiagramReady(true);
-    };
-
-    if (initialDocument) {
-      applyDocument(initialDocument);
-      return () => {
-        alive = false;
-      };
-    }
-
-    loadProjectDocument(project.id).then(({ document }) => {
-      if (!alive) return;
-      if (document) {
-        applyDocument(document);
-      } else {
-        setDiagramReady(true);
-      }
-    });
-
-    return () => {
-      alive = false;
-    };
-  }, [initialDocument, project.id, setDiagramEdges, setDiagramNodes]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      EDITOR_PANELS_STORAGE_KEY,
-      JSON.stringify({ library: showLibraryPanel, properties: showPropertiesPanel }),
-    );
-  }, [showLibraryPanel, showPropertiesPanel]);
-
-  const saveProject = useCallback(() => {
-    void saveProjectDocument(
-      project.id,
-      {
-        version: editorStorageVersion,
-        pages,
-        currentPageId,
-        mode,
-        zoom,
-        showGrid,
-        snapToGrid,
-        gridSize,
-        diagramNodes,
-        diagramEdges,
-      },
-    );
-    markSaved();
-  }, [currentPageId, diagramEdges, diagramNodes, gridSize, markSaved, mode, pages, project.id, showGrid, snapToGrid, zoom]);
-
-  useEffect(() => {
-    if (!diagramReady) return;
-    if (mode === "diagram" && !diagramFlowReady) return;
-    const timeout = window.setTimeout(saveProject, 650);
-    return () => window.clearTimeout(timeout);
-  }, [diagramFlowReady, diagramReady, mode, saveProject]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const key = event.key.toLowerCase();
-      const isTextEditing = target?.matches("input, textarea, select, [contenteditable='true']");
-      if (isTextEditing && !((event.metaKey || event.ctrlKey) && key === "r")) return;
-      if ((event.metaKey || event.ctrlKey) && key === "z") {
-        event.preventDefault();
-        if (event.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && key === "y") {
-        event.preventDefault();
-        redo();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && key === "r") {
-        event.preventDefault();
-        redo();
-        return;
-      }
-      if (mode === "diagram") {
-        if ((event.metaKey || event.ctrlKey) && key === "c") {
-          event.preventDefault();
-          copyDiagramSelection();
-          return;
-        }
-        if ((event.metaKey || event.ctrlKey) && key === "v") {
-          event.preventDefault();
-          pasteDiagramClipboard();
-          return;
-        }
-        if ((event.metaKey || event.ctrlKey) && key === "d") {
-          event.preventDefault();
-          duplicateDiagramSelection();
-          return;
-        }
-        if (event.key === "Delete" || event.key === "Backspace") {
-          event.preventDefault();
-          deleteDiagramSelection();
-        }
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && key === "v") {
-        event.preventDefault();
-        pasteClipboard();
-        return;
-      }
-      if (selectedIds.length === 0) return;
-      if ((event.metaKey || event.ctrlKey) && key === "c") {
-        event.preventDefault();
-        copySelected();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && key === "d") {
-        event.preventDefault();
-        duplicateShape();
-        return;
-      }
-      if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        deleteSelected();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    copyDiagramSelection,
-    copySelected,
-    deleteDiagramSelection,
-    deleteSelected,
-    duplicateDiagramSelection,
-    duplicateShape,
-    mode,
-    pasteClipboard,
-    pasteDiagramClipboard,
-    redo,
-    selectedIds.length,
-    undo,
-  ]);
+  }, [graph, setMode]);
 
   const exportPng = async (fileName: string) => {
     if (!canvasRef.current) return;
@@ -550,10 +165,10 @@ export function EditorShell({
           zoom={zoom}
           onToggleGrid={toggleGrid}
           onToggleSnap={toggleSnap}
-          showLibraryPanel={showLibraryPanel}
-          showPropertiesPanel={showPropertiesPanel}
-          onToggleLibraryPanel={() => setShowLibraryPanel((current) => !current)}
-          onTogglePropertiesPanel={() => setShowPropertiesPanel((current) => !current)}
+          showLibraryPanel={panels.showLibraryPanel}
+          showPropertiesPanel={panels.showPropertiesPanel}
+          onToggleLibraryPanel={() => panels.setShowLibraryPanel((current) => !current)}
+          onTogglePropertiesPanel={() => panels.setShowPropertiesPanel((current) => !current)}
           onFitView={() => {
             setPan({ x: 0, y: 0 });
             setZoom(1);
@@ -569,15 +184,15 @@ export function EditorShell({
             showGrid,
             snapToGrid,
             gridSize,
-            diagramNodes,
-            diagramEdges,
+            diagramNodes: graph.diagramNodes,
+            diagramEdges: graph.diagramEdges,
           }, fileName)}
           onExportSvg={(fileName) => exportSvg(shapes, fileName)}
           onExportPng={exportPng}
           onExportPdf={exportPdf}
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showLibraryPanel ? (
+          {panels.showLibraryPanel ? (
             <LibraryPanel
               mode={mode}
               pages={pages}
@@ -587,36 +202,24 @@ export function EditorShell({
               onDuplicatePage={duplicatePage}
               onDeletePage={deletePage}
               onAddShape={addShape}
-              onAddDiagramNode={addDiagramNode}
+              onAddDiagramNode={graph.addDiagramNode}
               onAddImage={addImageShape}
               onAddTemplate={addTemplate}
               onAddIcon={addIconShape}
               onAddCustomIcon={addCustomIconShape}
-              onAddDiagramIcon={addDiagramIcon}
-              onAddDiagramImage={addDiagramImage}
-              onHide={() => setShowLibraryPanel(false)}
+              onAddDiagramIcon={graph.addDiagramIcon}
+              onAddDiagramImage={graph.addDiagramImage}
+              onHide={() => panels.setShowLibraryPanel(false)}
             />
           ) : null}
           <div ref={canvasRef} className="relative min-h-0 min-w-0 flex-1 bg-[#e8edf5]">
-            {!showLibraryPanel ? (
-              <button
-                type="button"
-                className={cn("absolute left-3 top-3 z-20 toolbar-button bg-white shadow-sm")}
-                title="Mostrar panel insertar"
-                aria-label="Mostrar panel insertar"
-                onClick={() => setShowLibraryPanel(true)}
-              >
+            {!panels.showLibraryPanel ? (
+              <button type="button" className={cn("absolute left-3 top-3 z-20 toolbar-button bg-white shadow-sm")} title="Mostrar panel insertar" aria-label="Mostrar panel insertar" onClick={() => panels.setShowLibraryPanel(true)}>
                 <PanelLeft size={16} />
               </button>
             ) : null}
-            {!showPropertiesPanel ? (
-              <button
-                type="button"
-                className={cn("absolute right-3 top-3 z-20 toolbar-button bg-white shadow-sm")}
-                title="Mostrar propiedades"
-                aria-label="Mostrar propiedades"
-                onClick={() => setShowPropertiesPanel(true)}
-              >
+            {!panels.showPropertiesPanel ? (
+              <button type="button" className={cn("absolute right-3 top-3 z-20 toolbar-button bg-white shadow-sm")} title="Mostrar propiedades" aria-label="Mostrar propiedades" onClick={() => panels.setShowPropertiesPanel(true)}>
                 <PanelRight size={16} />
               </button>
             ) : null}
@@ -624,74 +227,38 @@ export function EditorShell({
               <WireframeCanvas />
             ) : (
               <DiagramCanvas
-                nodes={diagramNodesWithHandlers}
-                edges={diagramEdges}
-                onDiagramFlowReady={handleDiagramFlowReady}
-                onDropFlowNode={addDiagramNode}
-                onDropFlowIcon={addDiagramIcon}
-                onNodesChange={onDiagramNodesChange}
-                onEdgesChange={onDiagramEdgesChange}
-                onConnect={(connection) =>
-                  setDiagramEdges((edges) => {
-                    const normalizedConnection = normalizeConnection(connection, diagramNodes);
-                    return addEdge(
-                      {
-                        ...normalizedConnection,
-                        sourceHandle: normalizedConnection.sourceHandle ?? defaultFlowSourceHandle,
-                        targetHandle: normalizedConnection.targetHandle ?? defaultFlowTargetHandle,
-                        type: "smoothstep",
-                        reconnectable: true,
-                        interactionWidth: 32,
-                        markerEnd: { type: MarkerType.ArrowClosed },
-                        label: "",
-                        data: { lineStyle: "solid" },
-                        style: { strokeWidth: 2.5 },
-                      },
-                      edges,
-                    ).map((edge) => applyFlowEdgeLineStyle(edge));
-                  })
-                }
-                onReconnect={(oldEdge, connection) =>
-                  setDiagramEdges((edges) => {
-                    const normalizedConnection = normalizeConnection(connection, diagramNodes);
-                    return reconnectEdge(
-                      oldEdge,
-                      {
-                        ...normalizedConnection,
-                        sourceHandle: normalizedConnection.sourceHandle ?? defaultFlowSourceHandle,
-                        targetHandle: normalizedConnection.targetHandle ?? defaultFlowTargetHandle,
-                      },
-                      edges,
-                    ).map((edge) => applyFlowEdgeLineStyle({ ...edge, type: "smoothstep", reconnectable: true, interactionWidth: edge.interactionWidth ?? 32 }));
-                  })
-                }
-                onEdgeLabelChange={(id, label) =>
-                  setDiagramEdges((edges) =>
-                    edges.map((edge) => edge.id === id ? { ...edge, label } : edge),
-                  )
-                }
-                onSelectionChange={handleDiagramSelectionChange}
-                onDeleteSelection={deleteDiagramSelection}
-                onDeleteNode={deleteDiagramNode}
-                onDeleteEdge={deleteDiagramEdge}
-                onDuplicateNode={duplicateDiagramNode}
-                onDuplicateSelection={duplicateDiagramSelection}
-                onCopySelection={copyDiagramSelection}
-                onPaste={pasteDiagramClipboard}
+                nodes={graph.diagramNodesWithHandlers}
+                edges={graph.diagramEdges}
+                onDiagramFlowReady={() => graph.setDiagramFlowReady(true)}
+                onDropFlowNode={graph.addDiagramNode}
+                onDropFlowIcon={graph.addDiagramIcon}
+                onNodesChange={graph.onDiagramNodesChange}
+                onEdgesChange={graph.onDiagramEdgesChange}
+                onConnect={(connection) => graph.setDiagramEdges((edges) => connectFlowEdge(edges, connection, graph.diagramNodes))}
+                onReconnect={(oldEdge, connection) => graph.setDiagramEdges((edges) => reconnectFlowEdge(edges, oldEdge, connection, graph.diagramNodes))}
+                onEdgeLabelChange={(id, label) => graph.setDiagramEdges((edges) => edges.map((edge) => edge.id === id ? { ...edge, label } : edge))}
+                onSelectionChange={graph.handleDiagramSelectionChange}
+                onDeleteSelection={graph.deleteDiagramSelection}
+                onDeleteNode={graph.deleteDiagramNode}
+                onDeleteEdge={graph.deleteDiagramEdge}
+                onDuplicateNode={clipboard.duplicateDiagramNode}
+                onDuplicateSelection={clipboard.duplicateDiagramSelection}
+                onCopySelection={clipboard.copyDiagramSelection}
+                onPaste={clipboard.pasteDiagramClipboard}
               />
             )}
           </div>
-          {showPropertiesPanel ? (
+          {panels.showPropertiesPanel ? (
             mode === "wireframe" ? (
-              <PropertiesPanel selectedShape={selectedShape} onHide={() => setShowPropertiesPanel(false)} />
+              <PropertiesPanel selectedShape={selectedShape} onHide={() => panels.setShowPropertiesPanel(false)} />
             ) : (
               <DiagramPropertiesPanel
                 selectedNode={selectedDiagramNode}
                 selectedEdge={selectedDiagramEdge}
-                onUpdateNode={updateDiagramNode}
-                onUpdateEdge={updateDiagramEdge}
-                onDeleteEdge={deleteDiagramEdge}
-                onHide={() => setShowPropertiesPanel(false)}
+                onUpdateNode={graph.updateDiagramNode}
+                onUpdateEdge={graph.updateDiagramEdge}
+                onDeleteEdge={graph.deleteDiagramEdge}
+                onHide={() => panels.setShowPropertiesPanel(false)}
               />
             )
           ) : null}

@@ -1,4 +1,4 @@
-import type { ShapeStyle, TemplateType, WirePage, WireShape } from "@/stores/editor/editor-store";
+import type { ShapeStyle, TemplateType, WirePage, WireShape } from "@/entities/wireframe/wireframe.types";
 
 import { makeShape, normalizeStyle } from "./shape-factory";
 

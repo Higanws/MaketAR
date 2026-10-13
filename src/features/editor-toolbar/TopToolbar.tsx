@@ -1,23 +1,16 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ChevronDown,
-  Download,
-  Grid3X3,
-  Magnet,
-  Maximize2,
-  PanelLeft,
-  PanelRight,
-  Redo2,
-  Save,
-  Undo2,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { Save } from "lucide-react";
 import { useState } from "react";
+
 import type { DiagramMode } from "@/entities/wireframe/wireframe.types";
-import { cn } from "@/lib/utils";
+import { ExportFileNameDialog } from "@/features/editor-toolbar/ExportFileNameDialog";
+import { ExportMenu, type ExportFormat } from "@/features/editor-toolbar/ExportMenu";
+import { ToolbarHistoryControls } from "@/features/editor-toolbar/ToolbarHistoryControls";
+import { ToolbarModeSwitch } from "@/features/editor-toolbar/ToolbarModeSwitch";
+import { ToolbarPanelToggles } from "@/features/editor-toolbar/ToolbarPanelToggles";
+import { ToolbarProjectTitle } from "@/features/editor-toolbar/ToolbarProjectTitle";
+import { ToolbarViewportControls } from "@/features/editor-toolbar/ToolbarViewportControls";
 import { sanitizeFileName } from "@/shared/lib/export-utils";
 
 type ToolbarProject = {
@@ -52,8 +45,6 @@ export type TopToolbarProps = {
   onExportPng: (fileName: string) => void;
   onExportPdf: (fileName: string) => void;
 };
-
-type ExportFormat = "png" | "svg" | "pdf" | "json";
 
 export function TopToolbar({
   project,
@@ -105,166 +96,49 @@ export function TopToolbar({
 
   return (
     <header className="relative flex h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <button type="button" className="toolbar-button" title="Volver a proyectos" onClick={onBack}>
-          <ArrowLeft size={16} />
-        </button>
-        <div className="min-w-0 px-2">
-          <div className="truncate text-sm font-semibold">{project.name}</div>
-          <div className="truncate text-xs text-slate-500">{lastSavedAt}</div>
-        </div>
-      </div>
-
+      <ToolbarProjectTitle name={project.name} lastSavedAt={lastSavedAt} onBack={onBack} />
       <div className="flex items-center gap-2">
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-1">
-          <button
-            type="button"
-            onClick={() => {
-              setExportOpen(false);
-              onModeChange("wireframe");
-            }}
-            className={cn("segmented-button", mode === "wireframe" && "is-active")}
-          >
-            Wireframe
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setExportOpen(false);
-              onModeChange("diagram");
-            }}
-            className={cn("segmented-button", mode === "diagram" && "is-active")}
-          >
-            Flujo
-          </button>
-        </div>
-        <div className="flex items-center gap-1 rounded-md border border-slate-200 p-1">
-          <button
-            type="button"
-            className="toolbar-button"
-            title="Deshacer (Cmd/Ctrl+Z)"
-            onClick={onUndo}
-            disabled={!canUndo}
-          >
-            <Undo2 size={15} />
-          </button>
-          <button
-            type="button"
-            className="toolbar-button"
-            title="Rehacer (Cmd/Ctrl+R, Cmd/Ctrl+Y o Cmd/Ctrl+Shift+Z)"
-            onClick={onRedo}
-            disabled={!canRedo}
-          >
-            <Redo2 size={15} />
-          </button>
-        </div>
-        <button type="button" className={cn("toolbar-button", showGrid && "is-active")} onClick={onToggleGrid} title="Grid" aria-pressed={showGrid}>
-          <Grid3X3 size={15} />
-        </button>
-        <button
-          type="button"
-          className={cn("toolbar-toggle", snapToGrid && "is-active")}
-          onClick={onToggleSnap}
-          title="Snap: grilla y autoalineado"
-          aria-pressed={snapToGrid}
-        >
-          <Magnet size={14} />
-          Snap
-        </button>
-        <button type="button" className="toolbar-button" onClick={onZoomOut} title="Zoom out"><ZoomOut size={15} /></button>
-        <span className="min-w-12 rounded-md bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button type="button" className="toolbar-button" onClick={onZoomIn} title="Zoom in"><ZoomIn size={15} /></button>
-        <button type="button" className="toolbar-button" onClick={onFitView} title="Centrar canvas"><Maximize2 size={15} /></button>
-        <div className="mx-1 h-6 w-px bg-slate-200" aria-hidden="true" />
-        <button
-          type="button"
-          className={cn("toolbar-button", showLibraryPanel && "is-active")}
-          onClick={onToggleLibraryPanel}
-          title={showLibraryPanel ? "Ocultar panel insertar" : "Mostrar panel insertar"}
-          aria-pressed={showLibraryPanel}
-        >
-          <PanelLeft size={15} />
-        </button>
-        <button
-          type="button"
-          className={cn("toolbar-button", showPropertiesPanel && "is-active")}
-          onClick={onTogglePropertiesPanel}
-          title={showPropertiesPanel ? "Ocultar propiedades" : "Mostrar propiedades"}
-          aria-pressed={showPropertiesPanel}
-        >
-          <PanelRight size={15} />
-        </button>
+        <ToolbarModeSwitch
+          mode={mode}
+          onModeChange={(nextMode) => {
+            setExportOpen(false);
+            onModeChange(nextMode);
+          }}
+        />
+        <ToolbarHistoryControls canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} />
+        <ToolbarViewportControls
+          showGrid={showGrid}
+          snapToGrid={snapToGrid}
+          zoom={zoom}
+          onToggleGrid={onToggleGrid}
+          onToggleSnap={onToggleSnap}
+          onZoomIn={onZoomIn}
+          onZoomOut={onZoomOut}
+          onFitView={onFitView}
+        />
+        <ToolbarPanelToggles
+          showLibraryPanel={showLibraryPanel}
+          showPropertiesPanel={showPropertiesPanel}
+          onToggleLibraryPanel={onToggleLibraryPanel}
+          onTogglePropertiesPanel={onTogglePropertiesPanel}
+        />
       </div>
-
       <div className="flex items-center gap-2">
         <button type="button" className="secondary-button" onClick={onSave}>
           <Save size={15} />
           Guardar
         </button>
-        <div className="relative">
-          <button className="primary-button" onClick={() => setExportOpen((current) => !current)}>
-            <Download size={15} />
-            Exportar
-            <ChevronDown size={14} />
-          </button>
-          {exportOpen ? (
-            <div className="absolute right-0 top-10 z-50 w-40 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-xl">
-              <ExportMenuButton label="PNG" onClick={() => requestExport("png")} />
-              <ExportMenuButton label="SVG" onClick={() => requestExport("svg")} />
-              <ExportMenuButton label="PDF" onClick={() => requestExport("pdf")} />
-              <ExportMenuButton label="JSON" onClick={() => requestExport("json")} />
-            </div>
-          ) : null}
-        </div>
+        <ExportMenu open={exportOpen} onToggle={() => setExportOpen((current) => !current)} onRequest={requestExport} />
       </div>
       {pendingExport ? (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/25 p-4">
-          <div className="w-full max-w-[380px] rounded-md border border-slate-200 bg-white p-4 text-sm shadow-xl">
-            <h2 className="font-semibold text-slate-950">Exportar {pendingExport.toUpperCase()}</h2>
-            <p className="mt-1 text-xs text-slate-500">Elige el nombre del fichero antes de descargar.</p>
-            <label className="property-label mt-4">
-              Nombre del fichero
-              <div className="flex items-center gap-2">
-                <input
-                  className="property-input"
-                  autoFocus
-                  value={exportFileName}
-                  onChange={(event) => setExportFileName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") confirmExport();
-                    if (event.key === "Escape") setPendingExport(null);
-                  }}
-                />
-                <span className="rounded-md bg-slate-100 px-2 py-2 text-xs font-semibold text-slate-500">
-                  .{pendingExport}
-                </span>
-              </div>
-            </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <button className="secondary-button" onClick={() => setPendingExport(null)}>
-                Cancelar
-              </button>
-              <button className="primary-button" onClick={confirmExport}>
-                <Download size={15} />
-                Exportar
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExportFileNameDialog
+          format={pendingExport}
+          fileName={exportFileName}
+          onFileNameChange={setExportFileName}
+          onCancel={() => setPendingExport(null)}
+          onConfirm={confirmExport}
+        />
       ) : null}
     </header>
-  );
-}
-
-function ExportMenuButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50"
-      onClick={onClick}
-    >
-      {label}
-    </button>
   );
 }
