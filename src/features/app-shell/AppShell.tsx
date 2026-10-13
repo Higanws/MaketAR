@@ -39,7 +39,6 @@ export function AppShell() {
           key={workspace.activeProject.id}
           project={workspace.activeProject}
           onBack={() => workspace.setView("dashboard")}
-          initialDocument={workspace.initialEditorDocument}
         />
       ) : dashboard}
       {createOpen ? (

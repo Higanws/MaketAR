@@ -14,8 +14,9 @@ import {
   OnNodesChange,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
 } from "@xyflow/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
 import { FlowContextMenu, type FlowContextMenuState } from "@/features/editor/flow/FlowContextMenu";
@@ -43,6 +44,7 @@ export function DiagramCanvas({
   onDuplicateSelection,
   onCopySelection,
   onPaste,
+  onRegisterFitView,
 }: {
   nodes: FlowNodeType[];
   edges: Edge[];
@@ -62,6 +64,7 @@ export function DiagramCanvas({
   onDuplicateSelection: () => void;
   onCopySelection: () => void;
   onPaste: () => void;
+  onRegisterFitView: (fit: () => void) => void;
 }) {
   return (
     <ReactFlowProvider>
@@ -84,6 +87,7 @@ export function DiagramCanvas({
         onDuplicateSelection={onDuplicateSelection}
         onCopySelection={onCopySelection}
         onPaste={onPaste}
+        onRegisterFitView={onRegisterFitView}
       />
     </ReactFlowProvider>
   );
@@ -108,6 +112,7 @@ export function DiagramCanvasInner({
   onDuplicateSelection,
   onCopySelection,
   onPaste,
+  onRegisterFitView,
 }: {
   nodes: FlowNodeType[];
   edges: Edge[];
@@ -127,8 +132,13 @@ export function DiagramCanvasInner({
   onDuplicateSelection: () => void;
   onCopySelection: () => void;
   onPaste: () => void;
+  onRegisterFitView: (fit: () => void) => void;
 }) {
+  const { fitView } = useReactFlow();
   const [contextMenu, setContextMenu] = useState<FlowContextMenuState | null>(null);
+  useEffect(() => {
+    onRegisterFitView(() => fitView({ padding: 0.2 }));
+  }, [fitView, onRegisterFitView]);
   const selectedNodeIds = useMemo(() => nodes.filter((node) => node.selected).map((node) => node.id), [nodes]);
   const selectedEdgeIds = useMemo(() => edges.filter((edge) => edge.selected).map((edge) => edge.id), [edges]);
   const hasSelection = selectedNodeIds.length > 0 || selectedEdgeIds.length > 0;

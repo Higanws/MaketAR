@@ -23,16 +23,12 @@ import { exportPngFromElement } from "@/features/export/export-png";
 import { useEditorStore } from "@/stores/editor";
 import { editorStorageVersion } from "@/shared/config/editor";
 import { cn } from "@/lib/utils";
-import type { EditorDocument } from "@/types/project";
-
 export function EditorShell({
   project,
   onBack,
-  initialDocument,
 }: {
   project: Project;
   onBack: () => void;
-  initialDocument: EditorDocument | null;
 }) {
   const pages = useEditorStore((state) => state.pages);
   const currentPageId = useEditorStore((state) => state.currentPageId);
@@ -68,8 +64,9 @@ export function EditorShell({
   const deletePage = useEditorStore((state) => state.deletePage);
   const markSaved = useEditorStore((state) => state.markSaved);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const fitFlowView = useRef<() => void>(() => undefined);
   const panels = useEditorPanelVisibility();
-  const graph = useDiagramGraph(initialDocument);
+  const graph = useDiagramGraph();
   const shapes = useMemo(
     () => pages.find((page) => page.id === currentPageId)?.shapes ?? [],
     [pages, currentPageId],
@@ -120,6 +117,9 @@ export function EditorShell({
   });
 
   const setDiagramFlowReady = graph.setDiagramFlowReady;
+  const registerFitView = useCallback((fit: () => void) => {
+    fitFlowView.current = fit;
+  }, []);
   const handleModeChange = useCallback((nextMode: DiagramMode) => {
     if (nextMode === "diagram") setDiagramFlowReady(false);
     setMode(nextMode);
@@ -160,6 +160,10 @@ export function EditorShell({
           onToggleLibraryPanel={() => panels.setShowLibraryPanel((current) => !current)}
           onTogglePropertiesPanel={() => panels.setShowPropertiesPanel((current) => !current)}
           onFitView={() => {
+            if (mode === "diagram") {
+              fitFlowView.current();
+              return;
+            }
             setPan({ x: 0, y: 0 });
             setZoom(1);
           }}
@@ -227,7 +231,8 @@ export function EditorShell({
                 onConnect={(connection) => graph.setDiagramEdges((edges) => connectFlowEdge(edges, connection, graph.diagramNodes))}
                 onReconnect={(oldEdge, connection) => graph.setDiagramEdges((edges) => reconnectFlowEdge(edges, oldEdge, connection, graph.diagramNodes))}
                 onEdgeLabelChange={(id, label) => graph.setDiagramEdges((edges) => edges.map((edge) => edge.id === id ? { ...edge, label } : edge))}
-                onSelectionChange={graph.handleDiagramSelectionChange}
+                onRegisterFitView={registerFitView}
+                onSelectionChange={graph.setDiagramSelection}
                 onDeleteSelection={graph.deleteDiagramSelection}
                 onDeleteNode={graph.deleteDiagramNode}
                 onDeleteEdge={graph.deleteDiagramEdge}

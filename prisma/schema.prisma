@@ -7,11 +7,9 @@ datasource db {
 }
 
 /// Usuario interno de la instancia local. Solo se usa `email` (local@maketar.app).
-/// `password` reservado para auth futura; no implementada en la app actual.
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
-  password  String?
   projects  Project[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -42,30 +40,8 @@ model Diagram {
   canvasJson   Json
   viewportJson Json?
   thumbnailUrl String?
-  versions     DiagramVersion[]
-  assets       Asset[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
-}
-
-/// Historial de versiones — schema reservado; sin uso en código actual.
-model DiagramVersion {
-  id        String   @id @default(uuid())
-  diagramId String
-  diagram   Diagram  @relation(fields: [diagramId], references: [id], onDelete: Cascade)
-  snapshot  Json
-  createdAt DateTime @default(now())
-}
-
-/// Assets adjuntos a diagramas — schema reservado; sin uso en código actual.
-model Asset {
-  id        String   @id @default(uuid())
-  diagramId String
-  diagram   Diagram  @relation(fields: [diagramId], references: [id], onDelete: Cascade)
-  type      String
-  url       String
-  metadata  Json?
-  createdAt DateTime @default(now())
 }
 
 enum DiagramType {

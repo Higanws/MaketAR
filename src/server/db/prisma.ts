@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgresql://maketar:maketar@localhost:5432/maketar";
-const adapter = new PrismaPg(databaseUrl);
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 

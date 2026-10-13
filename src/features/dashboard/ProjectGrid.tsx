@@ -4,12 +4,14 @@ import { ProjectCard } from "@/features/dashboard/ProjectCard";
 export function ProjectGrid({
   projects,
   empty,
+  emptyMessage,
   onOpenProject,
   onRenameProject,
   onDeleteProject,
 }: {
   projects: Project[];
   empty?: boolean;
+  emptyMessage?: string;
   onOpenProject: (project: Project) => void;
   onRenameProject: (project: Project) => void;
   onDeleteProject: (project: Project) => void;
@@ -29,7 +31,7 @@ export function ProjectGrid({
       </div>
       {empty ? (
         <div className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          Todavia no hay proyectos recientes.
+          {emptyMessage ?? "Todavia no hay proyectos recientes."}
         </div>
       ) : null}
     </>

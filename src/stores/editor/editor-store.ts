@@ -2,7 +2,9 @@
 
 import { create, type StateCreator } from "zustand";
 
+import { readStoredDiagram } from "@/entities/flow/diagram-document";
 import { getShapeBounds, matchAlignment } from "@/entities/wireframe/alignment";
+import { createDiagramActions, emptyDiagramSlice, type DiagramSlice } from "@/stores/editor/diagram-slice";
 import {
   clonePages,
   getCurrentShapes,
@@ -30,7 +32,24 @@ type HistorySnapshot = {
   selectedIds: string[];
 };
 
-type EditorState = {
+type HydrateInput = {
+  mode?: DiagramMode;
+  selectedId?: string | null;
+  selectedIds?: string[];
+  zoom?: number;
+  pan?: { x: number; y: number };
+  gridSize?: number;
+  showGrid?: boolean;
+  snapToGrid?: boolean;
+  pages?: WirePage[];
+  shapes?: WireShape[];
+  currentPageId?: string;
+  lastSavedAt?: string;
+  diagramNodes?: unknown;
+  diagramEdges?: unknown;
+};
+
+type EditorState = DiagramSlice & {
   mode: DiagramMode;
   selectedId: string | null;
   selectedIds: string[];
@@ -84,7 +103,7 @@ type EditorState = {
   undo: () => void;
   redo: () => void;
   markSaved: () => void;
-  hydrate: (state: Partial<EditorState>) => void;
+  hydrate: (state: HydrateInput) => void;
   resetWorkspace: (kind: DiagramMode | "mixed" | TemplateType, projectName: string) => void;
 };
 
@@ -141,6 +160,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
   const commit = withHistory(set);
 
   return {
+    ...emptyDiagramSlice,
+    ...createDiagramActions(set, get),
     mode: "wireframe",
     selectedId: "shape-card",
     selectedIds: ["shape-card"],
@@ -612,6 +633,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }),
     markSaved: () => set({ lastSavedAt: new Date().toLocaleTimeString() }),
     hydrate: (state) => {
+      const diagram = readStoredDiagram(state.diagramNodes, state.diagramEdges);
       const pages =
         state.pages?.length
           ? state.pages.map((page) => ({
@@ -639,6 +661,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
         past: [],
         future: [],
         clipboard: [],
+        diagramNodes: diagram.nodes,
+        diagramEdges: diagram.edges,
+        diagramFlowReady: false,
+        selectedDiagramNodeId: null,
+        selectedDiagramEdgeId: null,
+        selectedDiagramNodeIds: [],
+        selectedDiagramEdgeIds: [],
       });
     },
     resetWorkspace: (kind, projectName) =>
@@ -664,6 +693,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const initialZoom = isBlankProject ? 1 : template === "mobile" ? 0.78 : 0.43;
         const initialPan = isBlankProject ? { x: 0, y: 0 } : template === "mobile" ? { x: -150, y: 18 } : { x: -34, y: 18 };
         return {
+          ...emptyDiagramSlice,
           mode: kind === "diagram" ? "diagram" : "wireframe",
           selectedId: null,
           selectedIds: [],

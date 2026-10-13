@@ -43,4 +43,18 @@ describe("editor store", () => {
     expect(shapes.find((shape) => shape.id === "a")?.x).toBe(10);
     expect(shapes.find((shape) => shape.id === "b")?.x).toBe(10);
   });
+
+  it("keeps the flow graph in the same store and clears it with the workspace", () => {
+    useEditorStore.getState().hydrate({
+      pages: [{ id: "page-test", name: "Test", shapes: [] }],
+      currentPageId: "page-test",
+      diagramNodes: [{ id: "start", position: { x: 0, y: 0 }, data: { label: "Inicio", variant: "start" } }],
+      diagramEdges: [],
+    });
+    expect(useEditorStore.getState().diagramNodes).toHaveLength(1);
+
+    useEditorStore.getState().resetWorkspace("mixed", "En blanco");
+    expect(useEditorStore.getState().diagramNodes).toEqual([]);
+    expect(useEditorStore.getState().diagramEdges).toEqual([]);
+  });
 });

@@ -2,11 +2,38 @@ import { z } from "zod";
 
 import { editorStorageVersion } from "@/shared/config/editor";
 
+const WireShapeSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+}).passthrough();
+
 const WirePageSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  shapes: z.array(z.record(z.string(), z.unknown())),
-});
+  shapes: z.array(WireShapeSchema),
+}).passthrough();
+
+const FlowNodeSchema = z.object({
+  id: z.string().min(1),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).passthrough(),
+  data: z.object({
+    label: z.string(),
+    variant: z.string().min(1),
+  }).passthrough(),
+}).passthrough();
+
+const FlowEdgeSchema = z.object({
+  id: z.string().min(1),
+  source: z.string().min(1),
+  target: z.string().min(1),
+}).passthrough();
 
 export const EditorDocumentSchema = z.object({
   version: z.number().int().positive().max(editorStorageVersion),
@@ -17,10 +44,10 @@ export const EditorDocumentSchema = z.object({
   showGrid: z.boolean(),
   snapToGrid: z.boolean(),
   gridSize: z.number().int().positive(),
-  diagramNodes: z.array(z.record(z.string(), z.unknown())),
-  diagramEdges: z.array(z.record(z.string(), z.unknown())),
+  diagramNodes: z.array(FlowNodeSchema),
+  diagramEdges: z.array(FlowEdgeSchema),
   updatedAt: z.string().optional(),
-}).superRefine((document, ctx) => {
+}).passthrough().superRefine((document, ctx) => {
   if (!document.pages.some((page) => page.id === document.currentPageId)) {
     ctx.addIssue({
       code: "custom",

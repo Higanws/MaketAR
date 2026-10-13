@@ -43,13 +43,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("dashboard loads and can switch theme", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("maketar-theme", "dark");
+  });
   await page.goto("/");
   await expect(page.getByText("MaketAR")).toBeVisible();
   await expect(page.getByText("Wireframes y diagramas")).toBeVisible();
-  await page.evaluate(() => {
-    document.documentElement.dataset.theme = "dark";
-    window.localStorage.setItem("maketar-theme", "dark");
-  });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
@@ -76,7 +75,7 @@ test("editor switches between wireframe and flow without crashing", async ({ pag
   ).toBeGreaterThan(3);
   await expect.poll(async () =>
     page.locator(".react-flow__handle[data-handleid$='-target']").count(),
-  ).toBeGreaterThan(3);
+  ).toBe(0);
   await expect(page.getByText("This page couldn’t load")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Wireframe" }).click();

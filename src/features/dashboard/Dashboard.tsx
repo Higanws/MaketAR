@@ -48,7 +48,13 @@ export function Dashboard({
   onRenameProject: (project: Project) => void;
 }) {
   const [section, setSection] = useState<DashboardSection>("projects");
-  const visibleProjects = section === "recent" ? projects.slice(0, 6) : projects;
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matchesQuery = (value: string) => !normalizedQuery || value.toLocaleLowerCase().includes(normalizedQuery);
+  const filteredProjects = projects.filter((project) => matchesQuery(project.name));
+  const visibleProjects = section === "recent" ? filteredProjects.slice(0, 6) : filteredProjects;
+  const wireframeTemplates = wireframeDashboardTemplates.filter((template) => matchesQuery(template.name) || matchesQuery(template.description));
+  const flowTemplates = flowDashboardTemplates.filter((template) => matchesQuery(template.name) || matchesQuery(template.description));
   const copy = headerCopy[section];
 
   return (
@@ -67,7 +73,13 @@ export function Dashboard({
           </div>
           <label className="flex h-9 w-[280px] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
             <Search size={15} />
-            <input className="min-w-0 flex-1 bg-transparent outline-none" placeholder="Buscar proyecto" />
+            <input
+              className="min-w-0 flex-1 bg-transparent outline-none"
+              placeholder="Buscar proyecto"
+              aria-label="Buscar proyecto"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </label>
         </header>
         <div className="min-h-0 flex-1 overflow-auto p-6">
@@ -76,20 +88,21 @@ export function Dashboard({
               <TemplateSection
                 title="Wireframes"
                 description="Layouts base para pantallas, productos y documentacion visual."
-                templates={wireframeDashboardTemplates}
+                templates={wireframeTemplates}
                 onCreateTemplate={onCreateTemplate}
               />
               <TemplateSection
                 title="Diagramas de flujo"
                 description="Mapas de proceso que abren directamente en modo Flujo."
-                templates={flowDashboardTemplates}
+                templates={flowTemplates}
                 onCreateTemplate={onCreateTemplate}
               />
             </div>
           ) : (
             <ProjectGrid
               projects={visibleProjects}
-              empty={section === "recent" && !visibleProjects.length}
+              empty={(section === "recent" && !visibleProjects.length) || (normalizedQuery.length > 0 && !visibleProjects.length)}
+              emptyMessage={normalizedQuery ? "Ningun proyecto coincide con la busqueda." : undefined}
               onOpenProject={onOpenProject}
               onRenameProject={onRenameProject}
               onDeleteProject={onDeleteProject}
