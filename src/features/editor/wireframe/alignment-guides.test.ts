@@ -6,7 +6,7 @@ import {
   getAlignmentGuides,
   getGuideCandidates,
   getShapeBounds,
-} from "@/features/editor/wireframe/alignment-guides";
+} from "@/entities/wireframe/alignment";
 
 function makeShape(overrides: Partial<WireShape> & Pick<WireShape, "id" | "type" | "x" | "y" | "width" | "height">): WireShape {
   return {
@@ -27,6 +27,7 @@ function makeShape(overrides: Partial<WireShape> & Pick<WireShape, "id" | "type"
       fontWeight: 400,
       textAlign: "center",
       opacity: 1,
+      borderRadius: 0,
       rotation: 0,
       borderTopLeftRadius: 0,
       borderTopRightRadius: 0,

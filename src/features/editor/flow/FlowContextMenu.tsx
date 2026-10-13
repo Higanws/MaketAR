@@ -1,6 +1,5 @@
 import type { Edge } from "@xyflow/react";
 
-import { promptEdgeLabel } from "@/features/editor/flow/edit-edge-label";
 import { ContextMenuButton } from "@/shared/ui/ContextMenuButton";
 
 export type FlowContextMenuState = {
@@ -53,7 +52,7 @@ export function FlowContextMenu({
             label="Editar etiqueta"
             onClick={() => {
               const edge = edges.find((item) => item.id === menu.id);
-              const nextLabel = promptEdgeLabel(String(edge?.label ?? ""));
+              const nextLabel = window.prompt("Etiqueta de la flecha", String(edge?.label ?? ""));
               if (nextLabel !== null) onEdgeLabelChange(menu.id!, nextLabel);
               onClose();
             }}

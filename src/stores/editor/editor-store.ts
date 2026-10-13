@@ -2,12 +2,11 @@
 
 import { create, type StateCreator } from "zustand";
 
-import { getShapeBounds } from "@/features/editor/wireframe/alignment-guides";
+import { getShapeBounds, matchAlignment } from "@/entities/wireframe/alignment";
 import {
   clonePages,
   getCurrentShapes,
   isTemplateType,
-  snapToObjects,
   updateCurrentPage,
 } from "@/entities/wireframe/page-ops";
 import { makeShape, normalizeShape, normalizeStyle } from "@/entities/wireframe/shape-factory";
@@ -322,7 +321,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       if (state.snapToGrid) {
         const rawDx = x - shapeToMove.x;
         const rawDy = y - shapeToMove.y;
-        const objectSnap = snapToObjects(currentShapes, movingIds, {
+        const objectSnap = matchAlignment(currentShapes, movingIds, {
           ...currentBounds,
           x: currentBounds.x + rawDx,
           y: currentBounds.y + rawDy,

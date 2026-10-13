@@ -20,7 +20,12 @@ type ImportedProjectJson = {
   project?: Partial<Project>;
 };
 
+const maxImportChars = 8_000_000;
+
 export function parseImportedProject(raw: string, fileName: string) {
+  if (raw.length > maxImportChars) {
+    throw new Error("El JSON es demasiado grande para importarlo.");
+  }
   const parsed = JSON.parse(raw) as ImportedProjectJson;
   const pages = Array.isArray(parsed.pages) ? parsed.pages : [];
   if (!pages.length || !pages.every((page) => Array.isArray(page.shapes))) {

@@ -100,13 +100,12 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
             )}
           </div>
           {showIconLabel ? (
-            <textarea
+            <FlowNodeLabel
+              id={id}
+              label={data.label}
               className={cn(flowTextareaBaseClass, "shrink-0 text-center font-semibold leading-tight")}
               style={{ ...flowTextStyle, maxHeight: Math.max(18, nodeHeight * 0.28) }}
-              rows={1}
-              value={data.label}
-              onChange={(event) => data.onChange?.(id, event.target.value)}
-              onPointerDown={(event) => event.stopPropagation()}
+              onChange={data.onChange}
             />
           ) : null}
         </div>
@@ -121,13 +120,12 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
               <ImageIcon size={iconVisualSize} strokeWidth={1.35} />
             )}
           </div>
-          <textarea
+          <FlowNodeLabel
+            id={id}
+            label={data.label}
             className={cn(flowTextareaBaseClass, "shrink-0 text-center font-semibold leading-tight")}
             style={{ ...flowTextStyle, maxHeight: Math.max(18, nodeHeight * 0.28) }}
-            rows={1}
-            value={data.label}
-            onChange={(event) => data.onChange?.(id, event.target.value)}
-            onPointerDown={(event) => event.stopPropagation()}
+            onChange={data.onChange}
           />
         </div>
       ) : null}
@@ -136,13 +134,12 @@ export function FlowNode({ id, data, selected, width, height }: NodeProps<Node<F
           className="flex size-full min-h-0 items-start justify-start rounded-lg border-2 border-dashed px-3 py-2"
           style={{ backgroundColor: withAlpha(fill, 0.28), borderColor: stroke }}
         >
-          <textarea
+          <FlowNodeLabel
+            id={id}
+            label={data.label}
             className={cn(flowTextareaBaseClass, "text-left font-bold uppercase tracking-[0.08em]")}
             style={flowTextStyle}
-            rows={1}
-            value={data.label}
-            onChange={(event) => data.onChange?.(id, event.target.value)}
-            onPointerDown={(event) => event.stopPropagation()}
+            onChange={data.onChange}
           />
         </div>
       ) : null}

@@ -5,12 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { flowNodeDefaults, normalizeFlowEdges } from "@/entities/flow/flow-templates";
 import type { FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
-import {
-  createFlowIconNode,
-  createFlowImageNode,
-  createFlowNode,
-  getImageNodeSize,
-} from "@/features/editor/flow/create-flow-node";
+import { createFlowNode, getImageNodeSize } from "@/features/editor/flow/create-flow-node";
 import { diagramNodeTools } from "@/features/editor/library/library-constants";
 import type { EditorDocument } from "@/types/project";
 
@@ -18,19 +13,18 @@ const sameStringList = (left: string[], right: string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
 export function getInitialDiagramState(document: EditorDocument | null) {
-  if (!document) return { nodes: [] as FlowNodeType[], edges: [] as Edge[], ready: false };
+  if (!document) return { nodes: [] as FlowNodeType[], edges: [] as Edge[] };
 
   const nodes = Array.isArray(document.diagramNodes) ? document.diagramNodes as FlowNodeType[] : [];
   const edges = Array.isArray(document.diagramEdges)
     ? normalizeFlowEdges(document.diagramEdges as Edge[], nodes, { repairHandles: true })
     : [];
 
-  return { nodes, edges, ready: true };
+  return { nodes, edges };
 }
 
 export function useDiagramGraph(initialDocument: EditorDocument | null) {
   const initialDiagramState = getInitialDiagramState(initialDocument);
-  const [diagramReady, setDiagramReady] = useState(initialDiagramState.ready);
   const [diagramFlowReady, setDiagramFlowReady] = useState(false);
   const [diagramNodes, setDiagramNodes, onDiagramNodesChange] = useNodesState<FlowNodeType>(initialDiagramState.nodes);
   const [diagramEdges, setDiagramEdges, onDiagramEdgesChange] = useEdgesState(initialDiagramState.edges);
@@ -46,7 +40,7 @@ export function useDiagramGraph(initialDocument: EditorDocument | null) {
   const addDiagramNode = useCallback((variant: FlowNodeVariant, label?: string, center?: { x: number; y: number }) => {
     const nodeCount = diagramNodes.length + 1;
     const defaultLabel = label ?? diagramNodeTools.find((tool) => tool.variant === variant)?.label ?? "Nodo";
-    const node = createFlowNode(variant, nodeCount, defaultLabel, center);
+    const node = createFlowNode(variant, nodeCount, { label: defaultLabel, center });
     setDiagramNodes((nodes) =>
       variant === "group"
         ? [node, ...nodes.map((item) => ({ ...item, selected: false }))]
@@ -55,7 +49,13 @@ export function useDiagramGraph(initialDocument: EditorDocument | null) {
   }, [diagramNodes.length, setDiagramNodes]);
 
   const addDiagramIcon = useCallback((iconName: string, iconSet: string, svgSrc?: string, displayLabel?: string, center?: { x: number; y: number }) => {
-    const node = createFlowIconNode(iconName, iconSet, diagramNodes.length + 1, svgSrc, displayLabel, center);
+    const node = createFlowNode("icon", diagramNodes.length + 1, {
+      label: displayLabel,
+      center,
+      iconName,
+      iconSet,
+      svgSrc,
+    });
     setDiagramNodes((nodes) => [...nodes, node]);
   }, [diagramNodes.length, setDiagramNodes]);
 
@@ -63,7 +63,7 @@ export function useDiagramGraph(initialDocument: EditorDocument | null) {
     const nodeCount = diagramNodes.length + 1;
     const defaults = flowNodeDefaults.image;
     void getImageNodeSize(imageSrc, { width: defaults.width, height: defaults.height }).then((size) => {
-      setDiagramNodes((nodes) => [...nodes, createFlowImageNode(imageSrc, size, nodeCount, name)]);
+      setDiagramNodes((nodes) => [...nodes, createFlowNode("image", nodeCount, { label: name, size, imageSrc })]);
     });
   }, [diagramNodes.length, setDiagramNodes]);
 
@@ -133,8 +133,6 @@ export function useDiagramGraph(initialDocument: EditorDocument | null) {
   }, [selectedDiagramEdgeIds, selectedDiagramNodeIds]);
 
   return {
-    diagramReady,
-    setDiagramReady,
     diagramFlowReady,
     setDiagramFlowReady,
     diagramNodes,

@@ -117,7 +117,7 @@ describe("flow edge styles", () => {
   it("infers missing connection handles from node geometry", () => {
     const supportFlow = makeFlowTemplate("support-flow");
     const connection = normalizeConnection(
-      { source: "support-triage", target: "support-decision" },
+      { source: "support-triage", target: "support-decision", sourceHandle: null, targetHandle: null },
       supportFlow.nodes,
     );
 

@@ -1,4 +1,4 @@
-import type { AlignmentGuide } from "@/features/editor/wireframe/alignment-guides";
+import type { AlignmentGuide } from "@/entities/wireframe/alignment";
 
 export function AlignmentGuideLayer({
   guides,

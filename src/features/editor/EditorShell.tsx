@@ -9,7 +9,6 @@ import { TopToolbar } from "@/features/editor-toolbar/TopToolbar";
 import { connectFlowEdge, reconnectFlowEdge } from "@/features/editor/flow/connect-flow-edge";
 import { DiagramCanvas } from "@/features/editor/flow/DiagramCanvas";
 import { useDiagramClipboard } from "@/features/editor/hooks/useDiagramClipboard";
-import { useDiagramDocument } from "@/features/editor/hooks/useDiagramDocument";
 import { useDiagramGraph } from "@/features/editor/hooks/useDiagramGraph";
 import { useEditorAutosave } from "@/features/editor/hooks/useEditorAutosave";
 import { useEditorHotkeys } from "@/features/editor/hooks/useEditorHotkeys";
@@ -90,18 +89,8 @@ export function EditorShell({
     },
   });
 
-  useDiagramDocument({
-    projectId: project.id,
-    initialDocument,
-    setDiagramNodes: graph.setDiagramNodes,
-    setDiagramEdges: graph.setDiagramEdges,
-    setDiagramReady: graph.setDiagramReady,
-    setDiagramFlowReady: graph.setDiagramFlowReady,
-  });
-
   const saveProject = useEditorAutosave({
     projectId: project.id,
-    diagramReady: graph.diagramReady,
     diagramFlowReady: graph.diagramFlowReady,
     mode,
     pages,
@@ -130,10 +119,11 @@ export function EditorShell({
     deleteSelected,
   });
 
+  const setDiagramFlowReady = graph.setDiagramFlowReady;
   const handleModeChange = useCallback((nextMode: DiagramMode) => {
-    if (nextMode === "diagram") graph.setDiagramFlowReady(false);
+    if (nextMode === "diagram") setDiagramFlowReady(false);
     setMode(nextMode);
-  }, [graph, setMode]);
+  }, [setDiagramFlowReady, setMode]);
 
   const exportPng = async (fileName: string) => {
     if (!canvasRef.current) return;

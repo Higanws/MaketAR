@@ -10,7 +10,7 @@ import {
   type AlignmentGuide,
   getAlignmentGuides,
   getShapeBounds,
-} from "@/features/editor/wireframe/alignment-guides";
+} from "@/entities/wireframe/alignment";
 import { CanvasShape, type ResizeDraft } from "@/features/editor/wireframe/CanvasShape";
 import { clientToCanvas } from "@/features/editor/wireframe/canvas-coords";
 import { MarqueeOverlay } from "@/features/editor/wireframe/MarqueeOverlay";

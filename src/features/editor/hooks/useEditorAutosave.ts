@@ -10,7 +10,6 @@ import { editorStorageVersion } from "@/shared/config/editor";
 
 export function useEditorAutosave({
   projectId,
-  diagramReady,
   diagramFlowReady,
   mode,
   pages,
@@ -24,7 +23,6 @@ export function useEditorAutosave({
   markSaved,
 }: {
   projectId: string;
-  diagramReady: boolean;
   diagramFlowReady: boolean;
   mode: DiagramMode;
   pages: WirePage[];
@@ -54,11 +52,10 @@ export function useEditorAutosave({
   }, [currentPageId, diagramEdges, diagramNodes, gridSize, markSaved, mode, pages, projectId, showGrid, snapToGrid, zoom]);
 
   useEffect(() => {
-    if (!diagramReady) return;
     if (mode === "diagram" && !diagramFlowReady) return;
     const timeout = window.setTimeout(saveProject, 650);
     return () => window.clearTimeout(timeout);
-  }, [diagramFlowReady, diagramReady, mode, saveProject]);
+  }, [diagramFlowReady, mode, saveProject]);
 
   return saveProject;
 }

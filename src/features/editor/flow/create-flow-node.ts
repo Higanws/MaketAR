@@ -40,75 +40,38 @@ function centeredPosition(center: { x: number; y: number } | undefined, width: n
 export function createFlowNode(
   variant: FlowNodeVariant,
   nodeCount: number,
-  label?: string,
-  center?: { x: number; y: number },
-  defaultLabel = "Nodo",
+  options: {
+    label?: string;
+    center?: { x: number; y: number };
+    size?: { width: number; height: number };
+    iconName?: string;
+    iconSet?: string;
+    svgSrc?: string;
+    imageSrc?: string;
+  } = {},
 ): FlowNodeType {
   const defaults = flowNodeDefaults[variant];
+  const width = options.size?.width ?? defaults.width;
+  const height = options.size?.height ?? defaults.height;
+  const idPrefix = variant === "icon" ? "flow-icon" : variant === "image" ? "flow-image" : "flow-node";
+  const label = variant === "image"
+    ? (options.label?.replace(/\.[^.]+$/i, "") || "Imagen")
+    : (options.label ?? (variant === "icon" ? options.iconName?.replace(/^Tb/, "") : undefined) ?? "Nodo");
+
   return {
-    id: `flow-node-${Date.now()}`,
+    id: `${idPrefix}-${Date.now()}`,
     type: "maketarFlow",
-    position: centeredPosition(center, defaults.width, defaults.height, nodeCount),
-    width: defaults.width,
-    height: defaults.height,
-    style: { width: defaults.width, height: defaults.height },
-    zIndex: variant === "group" ? -1 : undefined,
-    selected: variant !== "group",
+    position: variant === "image" ? fallbackPosition(nodeCount) : centeredPosition(options.center, width, height, nodeCount),
+    ...(variant === "image" ? {} : { width, height }),
+    style: { width, height },
+    ...(variant === "group" ? { zIndex: -1, selected: false } : {}),
+    ...(variant !== "group" && variant !== "icon" && variant !== "image" ? { selected: true } : {}),
     data: {
-      label: label ?? defaultLabel,
+      label,
       variant,
-      fill: defaults.fill,
-      stroke: defaults.stroke,
-      textColor: defaults.textColor,
-    },
-  };
-}
-
-export function createFlowIconNode(
-  iconName: string,
-  iconSet: string,
-  nodeCount: number,
-  svgSrc?: string,
-  displayLabel?: string,
-  center?: { x: number; y: number },
-): FlowNodeType {
-  const defaults = flowNodeDefaults.icon;
-  return {
-    id: `flow-icon-${Date.now()}`,
-    type: "maketarFlow",
-    position: centeredPosition(center, defaults.width, defaults.height, nodeCount),
-    width: defaults.width,
-    height: defaults.height,
-    style: { width: defaults.width, height: defaults.height },
-    data: {
-      label: displayLabel ?? iconName.replace(/^Tb/, ""),
-      variant: "icon",
-      iconName,
-      iconSet,
-      svgSrc,
-      fill: defaults.fill,
-      stroke: defaults.stroke,
-      textColor: defaults.textColor,
-    },
-  };
-}
-
-export function createFlowImageNode(
-  imageSrc: string,
-  size: { width: number; height: number },
-  nodeCount: number,
-  name = "Imagen",
-): FlowNodeType {
-  const defaults = flowNodeDefaults.image;
-  return {
-    id: `flow-image-${Date.now()}`,
-    type: "maketarFlow",
-    position: fallbackPosition(nodeCount),
-    style: { width: size.width, height: size.height },
-    data: {
-      label: name.replace(/\.[^.]+$/i, "") || "Imagen",
-      variant: "image",
-      imageSrc,
+      ...(options.iconName ? { iconName: options.iconName, iconSet: options.iconSet } : {}),
+      ...(options.svgSrc ? { svgSrc: options.svgSrc } : {}),
+      ...(options.imageSrc ? { imageSrc: options.imageSrc } : {}),
       fill: defaults.fill,
       stroke: defaults.stroke,
       textColor: defaults.textColor,

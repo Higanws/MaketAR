@@ -2,12 +2,12 @@ import type { WireShape } from "@/entities/wireframe/wireframe.types";
 
 export type AlignmentGuide = { orientation: "vertical" | "horizontal"; position: number };
 
+type Bounds = { x: number; y: number; width: number; height: number };
+
+const ALIGN_THRESHOLD = 10;
 const canvasFrameShapeTypes = new Set<WireShape["type"]>(["desktop", "mobile", "modal"]);
 
-export function boundsContain(
-  frame: WireShape,
-  bounds: { x: number; y: number; width: number; height: number },
-) {
+export function boundsContain(frame: WireShape, bounds: Bounds) {
   return (
     bounds.x >= frame.x &&
     bounds.y >= frame.y &&
@@ -16,11 +16,7 @@ export function boundsContain(
   );
 }
 
-export function getGuideCandidates(
-  shapes: WireShape[],
-  movingIds: Set<string>,
-  bounds: { x: number; y: number; width: number; height: number },
-) {
+export function getGuideCandidates(shapes: WireShape[], movingIds: Set<string>, bounds: Bounds) {
   const frames = shapes
     .filter((shape) => shape.visible && canvasFrameShapeTypes.has(shape.type) && !movingIds.has(shape.id))
     .sort((a, b) => a.width * a.height - b.width * b.height);
@@ -45,13 +41,9 @@ export function getShapeBounds(shapes: WireShape[]) {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
-export function getAlignmentGuides(
-  shapes: WireShape[],
-  movingIds: Set<string>,
-  bounds: { x: number; y: number; width: number; height: number },
-) {
-  const threshold = 10;
-  const guides: AlignmentGuide[] = [];
+export function matchAlignment(shapes: WireShape[], movingIds: Set<string>, bounds: Bounds) {
+  let bestX = ALIGN_THRESHOLD + 1;
+  let bestY = ALIGN_THRESHOLD + 1;
   let bestVertical: { diff: number; position: number } | null = null;
   let bestHorizontal: { diff: number; position: number } | null = null;
   const movingX = [bounds.x, bounds.x + bounds.width / 2, bounds.x + bounds.width];
@@ -63,21 +55,38 @@ export function getAlignmentGuides(
 
     for (let index = 0; index < movingX.length; index += 1) {
       const diff = targetX[index] - movingX[index];
-      if (Math.abs(diff) <= threshold && (!bestVertical || Math.abs(diff) < Math.abs(bestVertical.diff))) {
+      const distance = Math.abs(diff);
+      if (distance < Math.abs(bestX)) bestX = diff;
+      if (distance <= ALIGN_THRESHOLD && (!bestVertical || distance < Math.abs(bestVertical.diff))) {
         bestVertical = { diff, position: targetX[index] };
       }
     }
 
     for (let index = 0; index < movingY.length; index += 1) {
       const diff = targetY[index] - movingY[index];
-      if (Math.abs(diff) <= threshold && (!bestHorizontal || Math.abs(diff) < Math.abs(bestHorizontal.diff))) {
+      const distance = Math.abs(diff);
+      if (distance < Math.abs(bestY)) bestY = diff;
+      if (distance <= ALIGN_THRESHOLD && (!bestHorizontal || distance < Math.abs(bestHorizontal.diff))) {
         bestHorizontal = { diff, position: targetY[index] };
       }
     }
   }
 
+  const guides: AlignmentGuide[] = [];
   if (bestVertical) guides.push({ orientation: "vertical", position: bestVertical.position });
   if (bestHorizontal) guides.push({ orientation: "horizontal", position: bestHorizontal.position });
 
-  return guides;
+  const snappedX = Math.abs(bestX) <= ALIGN_THRESHOLD;
+  const snappedY = Math.abs(bestY) <= ALIGN_THRESHOLD;
+  return {
+    dx: snappedX ? bestX : 0,
+    dy: snappedY ? bestY : 0,
+    snappedX,
+    snappedY,
+    guides,
+  };
+}
+
+export function getAlignmentGuides(shapes: WireShape[], movingIds: Set<string>, bounds: Bounds) {
+  return matchAlignment(shapes, movingIds, bounds).guides;
 }

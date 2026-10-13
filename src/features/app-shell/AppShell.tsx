@@ -36,6 +36,7 @@ export function AppShell() {
     <main className="fixed inset-0 overflow-hidden bg-[#f4f7fb] text-slate-950">
       {workspace.view === "editor" && workspace.activeProject ? (
         <EditorShell
+          key={workspace.activeProject.id}
           project={workspace.activeProject}
           onBack={() => workspace.setView("dashboard")}
           initialDocument={workspace.initialEditorDocument}

@@ -3,8 +3,8 @@ import {
   getDeletedProjectIds,
   getLocalBundles,
   getLocalDocument,
+  getLocalDocumentRecord,
   getLocalProjects,
-  isLocalDocumentPending,
   markLocalProjectDeleted,
   migrateLegacyLocalStorage,
   saveLocalDocument,
@@ -66,9 +66,8 @@ export async function loadProjects() {
       ({ projects } = await api<ApiProjectResponse>("/api/projects"));
       projects = projects.filter((project) => !deletedProjectIds.has(project.id) && !isLegacySeedProject(project));
     }
-    await syncLocalPendingProjects();
-    ({ projects } = await api<ApiProjectResponse>("/api/projects"));
-    projects = projects.filter((project) => !deletedProjectIds.has(project.id) && !isLegacySeedProject(project));
+    const syncedProjects = await syncLocalPendingProjects();
+    projects = mergeProjects(projects, syncedProjects).filter((project) => !deletedProjectIds.has(project.id) && !isLegacySeedProject(project));
     const merged = mergeProjects(localProjects, projects).filter((project) => !deletedProjectIds.has(project.id));
     await Promise.all(merged.map((project) => saveLocalProject(project)));
     return { projects: merged, online: true as const };
@@ -119,8 +118,9 @@ export async function removeProject(projectId: string) {
 }
 
 export async function loadProjectDocument(projectId: string) {
-  const localDocument = await getLocalDocument(projectId).catch(() => undefined);
-  const pendingSync = await isLocalDocumentPending(projectId).catch(() => false);
+  const record = await getLocalDocumentRecord(projectId).catch(() => undefined);
+  const localDocument = record?.document;
+  const pendingSync = Boolean(record?.pendingSync);
   try {
     const result = await api<ApiProjectOneResponse>(`/api/projects/${projectId}`);
     if (result.document && isRemoteNewer(result.document, localDocument, pendingSync)) {
@@ -151,10 +151,17 @@ export async function saveProjectDocument(projectId: string, document: EditorDoc
 
 export async function syncLocalPendingProjects() {
   const bundles = await getLocalBundles().catch(() => []);
+  const synced: MaketarProject[] = [];
   for (const bundle of bundles) {
     if (!bundle.pendingSync) continue;
-    await createProject(bundle.project, bundle.document).catch(() => undefined);
+    try {
+      const result = await createProject(bundle.project, bundle.document);
+      if (result.online) synced.push(result.project);
+    } catch {
+      continue;
+    }
   }
+  return synced;
 }
 
 function mergeProjects(local: MaketarProject[], remote: MaketarProject[]) {

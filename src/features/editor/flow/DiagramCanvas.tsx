@@ -20,7 +20,6 @@ import { useMemo, useState } from "react";
 import type { FlowNodeType, FlowNodeVariant } from "@/entities/flow/flow.types";
 import { FlowContextMenu, type FlowContextMenuState } from "@/features/editor/flow/FlowContextMenu";
 import { FlowDiagramSync } from "@/features/editor/flow/FlowDiagramSync";
-import { promptEdgeLabel } from "@/features/editor/flow/edit-edge-label";
 import { flowNodeTypes } from "@/features/editor/flow/node-types";
 import { useFlowLibraryDrop } from "@/features/editor/flow/useFlowLibraryDrop";
 import { handleLibraryDragOver } from "@/features/editor/library/drag-drop";
@@ -151,7 +150,7 @@ export function DiagramCanvasInner({
         deleteKeyCode={null}
         multiSelectionKeyCode={["Meta", "Control", "Shift"]}
         onEdgeDoubleClick={(_, edge) => {
-          const nextLabel = promptEdgeLabel(String(edge.label ?? ""));
+          const nextLabel = window.prompt("Etiqueta de la flecha", String(edge.label ?? ""));
           if (nextLabel !== null) onEdgeLabelChange(edge.id, nextLabel);
         }}
         onNodeContextMenu={(event, node) => {

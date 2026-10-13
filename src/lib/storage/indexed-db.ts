@@ -89,14 +89,13 @@ export async function getDeletedProjectIds() {
   return Array.isArray(deletedProjectIds) ? deletedProjectIds : [];
 }
 
-export async function getLocalDocument(projectId: string) {
-  const record = await tx<DocumentRecord | undefined>(documentsStore, "readonly", (store) => store.get(projectId));
-  return record?.document;
+export async function getLocalDocumentRecord(projectId: string) {
+  return tx<DocumentRecord | undefined>(documentsStore, "readonly", (store) => store.get(projectId));
 }
 
-export async function isLocalDocumentPending(projectId: string) {
-  const record = await tx<DocumentRecord | undefined>(documentsStore, "readonly", (store) => store.get(projectId));
-  return Boolean(record?.pendingSync);
+export async function getLocalDocument(projectId: string) {
+  const record = await getLocalDocumentRecord(projectId);
+  return record?.document;
 }
 
 export async function saveLocalDocument(projectId: string, document: EditorDocument, pendingSync = false) {
