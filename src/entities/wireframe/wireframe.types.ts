@@ -3,8 +3,17 @@ export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type TextAlign = "left" | "center" | "right";
 export type TemplateType = "dashboard" | "landing" | "mobile" | "form" | "architecture";
 
+/** Degradado lineal del relleno. Ausente en documentos anteriores: el fill sólido sigue vigente. */
+export type ShapeFillGradient = {
+  enabled: boolean;
+  from: string;
+  to: string;
+  angle: number;
+};
+
 export type ShapeStyle = {
   fill: string;
+  fillGradient?: ShapeFillGradient;
   opacity: number;
   stroke: string;
   strokeWidth: number;

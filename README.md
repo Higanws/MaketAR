@@ -63,7 +63,7 @@ Abre:
 http://localhost
 ```
 
-El contenedor web expone la app en el puerto `80` por defecto y levanta PostgreSQL en otro contenedor.
+Un solo contenedor expone la app en el puerto `80` y arranca PostgreSQL adentro. La base no se publica al host.
 
 Si el puerto `80` esta ocupado:
 
@@ -139,7 +139,7 @@ NEXT_PUBLIC_APP_URL="http://localhost"
 MAKETAR_HTTP_PORT=80
 ```
 
-En Docker Compose, `DATABASE_URL` apunta al servicio interno `postgres`.
+En Docker, `DATABASE_URL` apunta a PostgreSQL dentro del mismo contenedor (`127.0.0.1`).
 
 ## Instalar Como App
 
@@ -252,19 +252,13 @@ El proyecto no usa autenticacion remota. Para el modo local se crea un usuario i
 
 ## Docker Compose
 
-Servicios incluidos:
+Un solo servicio, `web` (contenedor `maketar`):
 
-- `maketar-web`: Next.js standalone en produccion.
-- `maketar-postgres`: PostgreSQL local.
-- `postgres_data`: volumen persistente de base de datos.
+- Next.js standalone en produccion.
+- PostgreSQL en el mismo contenedor, solo en `127.0.0.1`.
+- `maketar_data`: volumen persistente de la base.
 
-El contenedor web ejecuta:
-
-```bash
-npx prisma db push && node server.js
-```
-
-Esto mantiene la base local alineada con `prisma/schema.prisma` al iniciar.
+Al iniciar, el contenedor crea la base si el volumen esta vacio, aplica `prisma db push` y levanta la app.
 
 ## Publicar Tu Fork
 

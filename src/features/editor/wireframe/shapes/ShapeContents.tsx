@@ -40,7 +40,7 @@ export function ButtonShapeContent({ shape }: { shape: WireShape }) {
 
 export function InputShapeContent({ shape }: { shape: WireShape }) {
   return (
-    <div className="flex size-full items-center rounded-[inherit] bg-white px-3 text-left">
+    <div className="flex size-full items-center rounded-[inherit] bg-transparent px-3 text-left">
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-500">{shape.text || "Placeholder"}</span>
       <span className="ml-2 h-5 w-px bg-slate-300" />
     </div>

@@ -19,8 +19,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+ENV DATABASE_URL=postgresql://maketar:maketar@127.0.0.1:5432/maketar
+ENV PGDATA=/var/lib/postgresql/data
 
-RUN addgroup --system --gid 1001 nodejs \
+RUN apk add --no-cache postgresql su-exec \
+  && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
@@ -30,8 +33,9 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-USER nextjs
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push && node server.js"]
+ENTRYPOINT ["/entrypoint.sh"]

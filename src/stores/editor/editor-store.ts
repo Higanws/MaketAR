@@ -316,11 +316,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
     updateShapeStyle: (id, patch) =>
       commit((state) => ({
         ...updateCurrentPage(state, (shapes) =>
-          shapes.map((shape) =>
-            shape.id === id
-              ? { ...shape, style: normalizeStyle({ ...shape.style, ...patch }) }
-              : shape,
-          ),
+          shapes.map((shape) => {
+            if (shape.id !== id) return shape;
+            const nextPatch = shape.type === "text" ? { ...patch, fillGradient: undefined } : patch;
+            return { ...shape, style: normalizeStyle({ ...shape.style, ...nextPatch }) };
+          }),
         ),
       })),
     moveShape: (id, x, y) => {

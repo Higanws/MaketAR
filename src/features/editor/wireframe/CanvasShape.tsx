@@ -1,5 +1,6 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent } from "react";
 
+import { shapeFillBackground } from "@/entities/wireframe/fill-gradient";
 import type { WireShape } from "@/entities/wireframe/wireframe.types";
 import {
   ButtonShapeContent,
@@ -8,7 +9,7 @@ import {
   NavbarShapeContent,
   TableShapeContent,
 } from "@/features/editor/wireframe/shapes/ShapeContents";
-import { ShapeSelectionChrome } from "@/features/editor/wireframe/shapes/ShapeSelectionChrome";
+import { ShapeSelectionChrome, type CornerRadii } from "@/features/editor/wireframe/shapes/ShapeSelectionChrome";
 import { cn } from "@/lib/utils";
 
 export { ContextMenuButton } from "@/shared/ui/ContextMenuButton";
@@ -48,6 +49,17 @@ export function CanvasShape({
       : `${shape.style.borderTopLeftRadius}px ${shape.style.borderTopRightRadius}px ${shape.style.borderBottomRightRadius}px ${shape.style.borderBottomLeftRadius}px`;
   const borderStyle = shape.style.strokeStyle === "dotted" ? "dotted" : shape.style.strokeStyle === "dashed" ? "dashed" : "solid";
   const isIconShape = shape.type === "icon";
+  const cornerLimit = Math.min(shape.width, shape.height) / 2;
+  const clampCorner = (value: number) => Math.min(Math.max(0, value), cornerLimit);
+  const cornerRadii: CornerRadii =
+    shape.type === "circle"
+      ? { nw: cornerLimit, ne: cornerLimit, se: cornerLimit, sw: cornerLimit }
+      : {
+          nw: clampCorner(shape.style.borderTopLeftRadius),
+          ne: clampCorner(shape.style.borderTopRightRadius),
+          se: clampCorner(shape.style.borderBottomRightRadius),
+          sw: clampCorner(shape.style.borderBottomLeftRadius),
+        };
 
   return (
     <div
@@ -73,7 +85,7 @@ export function CanvasShape({
         height: shape.height,
         transform: `rotate(${shape.style.rotation}deg)`,
         borderRadius: radius,
-        background: isIconShape ? "transparent" : shape.style.fill,
+        background: shapeFillBackground(shape),
         opacity: isDragging ? Math.min(shape.style.opacity, 0.45) : shape.style.opacity,
         border: isIconShape ? "0 solid transparent" : `${shape.style.strokeWidth}px ${borderStyle} color-mix(in srgb, ${shape.style.stroke} ${shape.style.strokeOpacity * 100}%, transparent)`,
         boxShadow: isIconShape ? "none" : `${shape.style.shadow.x}px ${shape.style.shadow.y}px ${shape.style.shadow.blur}px ${shape.style.shadow.spread}px ${shape.style.shadow.color}`,
@@ -92,7 +104,12 @@ export function CanvasShape({
         <MediaShapeContent shape={shape} />
       ) : null}
       {primarySelected ? (
-        <ShapeSelectionChrome onResizePointerDown={onResizePointerDown} onRotatePointerDown={onRotatePointerDown} />
+        <ShapeSelectionChrome
+          cornerRadii={cornerRadii}
+          strokeWidth={isIconShape ? 0 : shape.style.strokeWidth}
+          onResizePointerDown={onResizePointerDown}
+          onRotatePointerDown={onRotatePointerDown}
+        />
       ) : null}
     </div>
   );

@@ -23,7 +23,7 @@ Repositorio: `https://github.com/Higanws/MaketAR.git` · Rama principal: `main`
 | Persistencia remota | Prisma 7 + PostgreSQL |
 | Persistencia local | IndexedDB (`src/lib/storage/indexed-db.ts`) |
 | Tests | Vitest (unit), Playwright (e2e) |
-| Deploy | Docker Compose (`web` + `postgres`) |
+| Deploy | Docker Compose (un contenedor: Next.js + PostgreSQL) |
 
 **Node.js ≥ 22** · Puerto Docker por defecto: **80** → contenedor `3000`
 

@@ -1,3 +1,4 @@
+import { normalizeFillGradient } from "@/entities/wireframe/fill-gradient";
 import type { ShapeStyle, WireShape } from "@/entities/wireframe/wireframe.types";
 
 export const defaultStyle: ShapeStyle = {
@@ -27,11 +28,17 @@ export const defaultStyle: ShapeStyle = {
   textAlign: "center",
 };
 
-export const normalizeStyle = (style?: Partial<ShapeStyle>): ShapeStyle => ({
-  ...defaultStyle,
-  ...style,
-  shadow: { ...defaultStyle.shadow, ...style?.shadow },
-});
+export const normalizeStyle = (style?: Partial<ShapeStyle>): ShapeStyle => {
+  const next: ShapeStyle = {
+    ...defaultStyle,
+    ...style,
+    shadow: { ...defaultStyle.shadow, ...style?.shadow },
+  };
+  const fillGradient = style && "fillGradient" in style ? normalizeFillGradient(style.fillGradient) : undefined;
+  if (fillGradient) next.fillGradient = fillGradient;
+  else delete next.fillGradient;
+  return next;
+};
 
 export const normalizeShape = (shape: WireShape): WireShape => ({
   ...shape,
